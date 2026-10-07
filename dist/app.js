@@ -1,10 +1,14 @@
 const DAILY_RATE_KEY = "maeil-rate";
 const RECORDS_KEY = "maeil-records";
+const WORKERS_KEY = "maeil-workers";
+const SITES_KEY = "maeil-sites";
+const CURRENT_WORKER_KEY = "maeil-current-worker";
 const ACCESS_HASH = "41c8fa7d060badc5618a28326dc00cf07e1ce22a79a94a1fed94f271d3127447";
 const AUTH_SESSION_KEY = "today-gongsu-auth";
 const today = new Date();
 today.setHours(0, 0, 0, 0);
 let viewDate = new Date(today.getFullYear(), today.getMonth(), 1);
+// 새 근무자를 추가할 때 기본으로 들어가는 1공수 단가
 let dailyRate = Number(localStorage.getItem(DAILY_RATE_KEY)) || 200000;
 let hideMoney = false;
 let installPrompt = null;
@@ -12,6 +16,25 @@ let installPrompt = null;
 // 비워두면 휴대폰 기본 공유창(카카오톡 포함)이 열립니다.
 const KAKAO_JS_KEY = "";
 const APP_URL = new URL("./", location.href).href;
+
+const loadJson = (key, fallback) => {
+  try { const value = JSON.parse(localStorage.getItem(key)); return value ?? fallback; }
+  catch { return fallback; }
+};
+const newId = () => `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+// ── 근무자 · 현장 ──
+let workers = loadJson(WORKERS_KEY, null);
+if (!Array.isArray(workers) || !workers.length) workers = [{ id: "w1", name: "근무자 1", rate: dailyRate }];
+
+let sites = loadJson(SITES_KEY, null);
+if (!Array.isArray(sites) || !sites.length) {
+  sites = [
+    { name: "반포 재건축 현장", area: "서울 서초구" },
+    { name: "성수 오피스 현장", area: "서울 성동구" },
+    { name: "마곡 물류센터", area: "서울 강서구" }
+  ];
+}
 
 const seedRecords = [
   ["2026-10-01", 1, "반포 재건축 현장", "형틀 작업"],
@@ -30,17 +53,30 @@ const seedRecords = [
   ["2026-10-20", 1.5, "성수 오피스 현장", "연장 근무"]
 ].map(([date, work, site, memo]) => ({ date, work, site, memo }));
 
-let records = (() => {
-  try { return JSON.parse(localStorage.getItem(RECORDS_KEY)) || seedRecords; }
-  catch { return seedRecords; }
-})();
+let records = loadJson(RECORDS_KEY, null);
+if (!Array.isArray(records)) records = seedRecords;
+// 예전 기록(근무자 정보 없음)은 첫 번째 근무자 기록으로 옮김
+records.forEach((item) => { if (!item.worker || !workers.some((w) => w.id === item.worker)) item.worker = workers[0].id; item.work = Number(item.work); });
+
+let currentWorker = localStorage.getItem(CURRENT_WORKER_KEY) || "all";
+if (currentWorker !== "all" && !workers.some((w) => w.id === currentWorker)) currentWorker = "all";
 
 const $ = (selector) => document.querySelector(selector);
 const formatWon = (value) => `${Math.round(value).toLocaleString("ko-KR")}원`;
+const formatNum = (value) => Math.round(value).toLocaleString("ko-KR");
 const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const saveRecords = () => localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+const saveWorkers = () => localStorage.setItem(WORKERS_KEY, JSON.stringify(workers));
+const saveSites = () => localStorage.setItem(SITES_KEY, JSON.stringify(sites));
 const koreanDate = (date) => new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "long" }).format(date);
+const workerById = (id) => workers.find((w) => w.id === id);
+const workerName = (id) => workerById(id)?.name || "근무자";
+const rateOf = (record) => workerById(record.worker)?.rate ?? dailyRate;
+const payOf = (record) => Number(record.work) * rateOf(record);
+const findRecord = (date, worker) => records.find((item) => item.date === date && item.worker === worker);
+const visibleRecords = () => (currentWorker === "all" ? records : records.filter((item) => item.worker === currentWorker));
+const monthPrefix = () => `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, "0")}`;
 
 async function hashText(value) {
   const bytes = new TextEncoder().encode(value);
@@ -73,8 +109,22 @@ async function submitPasscode(event) {
 }
 
 function getMonthRecords() {
-  const prefix = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, "0")}`;
-  return records.filter((item) => item.date.startsWith(prefix));
+  const prefix = monthPrefix();
+  return visibleRecords().filter((item) => item.date.startsWith(prefix));
+}
+
+// ── 근무자 선택 탭 ──
+function renderWorkerTabs() {
+  const tabs = $("#workerTabs");
+  const options = [{ id: "all", name: "전체" }, ...workers];
+  tabs.innerHTML = options.map((w) => `<button type="button" class="worker-tab${currentWorker === w.id ? " active" : ""}" data-worker="${w.id}">${escapeHtml(w.name)}</button>`).join("")
+    + `<button type="button" class="worker-tab add" id="addWorkerTab" aria-label="근무자 추가">+ 근무자</button>`;
+  tabs.querySelectorAll("[data-worker]").forEach((button) => button.addEventListener("click", () => {
+    currentWorker = button.dataset.worker;
+    localStorage.setItem(CURRENT_WORKER_KEY, currentWorker);
+    renderCalendar();
+  }));
+  $("#addWorkerTab").addEventListener("click", () => openItemDialog("worker"));
 }
 
 function renderCalendar() {
@@ -85,36 +135,52 @@ function renderCalendar() {
   const gridStart = new Date(year, month, 1 - start.getDay());
   const calendar = $("#calendar");
   calendar.innerHTML = "";
+  const visible = visibleRecords();
 
   for (let i = 0; i < 42; i += 1) {
     const date = new Date(gridStart);
     date.setDate(gridStart.getDate() + i);
     const key = dateKey(date);
-    const record = records.find((item) => item.date === key);
+    const dayRecords = visible.filter((item) => item.date === key);
+    const work = dayRecords.reduce((sum, item) => sum + item.work, 0);
+    const pay = dayRecords.reduce((sum, item) => sum + payOf(item), 0);
     const button = document.createElement("button");
     button.type = "button";
     button.className = `calendar-day${date.getMonth() !== month ? " outside" : ""}${date.getDay() === 0 ? " sunday" : ""}${date.getDay() === 6 ? " saturday" : ""}${key === dateKey(today) ? " today" : ""}`;
-    button.setAttribute("aria-label", `${koreanDate(date)}${record ? `, ${record.work} 공수` : ", 기록 없음"}`);
-    button.innerHTML = `<span class="day-number">${date.getDate()}</span>${record ? `<span class="work-badge work-${String(record.work).replace(".", "")}">${record.work.toFixed(1)}</span>` : ""}`;
-    button.addEventListener("click", () => openWorkDialog(date, record));
+    button.setAttribute("aria-label", `${koreanDate(date)}${dayRecords.length ? `, ${work} 공수, ${formatWon(pay)}` : ", 기록 없음"}`);
+    let badge = "";
+    if (dayRecords.length) {
+      const level = dayRecords.length > 1 ? "work-multi" : `work-${String(work).replace(".", "")}`;
+      const label = hideMoney ? work.toFixed(1) : formatNum(pay);
+      badge = `<span class="work-badge ${level}">${label}</span>${dayRecords.length > 1 ? `<span class="people-count">${dayRecords.length}명</span>` : ""}`;
+    }
+    button.innerHTML = `<span class="day-number">${date.getDate()}</span>${badge}`;
+    button.addEventListener("click", () => openWorkDialog(date, dayRecords[0]?.worker));
     calendar.appendChild(button);
   }
+  $("#legendMulti").hidden = currentWorker !== "all" || workers.length < 2;
+  renderWorkerTabs();
   renderSummary();
   renderRecent($("#viewAllButton").dataset.expanded === "true");
 }
 
 function renderSummary() {
   const monthRecords = getMonthRecords();
-  const total = monthRecords.reduce((sum, item) => sum + Number(item.work), 0);
-  const sites = new Set(monthRecords.map((item) => item.site));
-  $("#salaryTotal").textContent = hideMoney ? "•••••••" : Math.round(total * dailyRate).toLocaleString("ko-KR");
-  $("#daysTotal").textContent = `${monthRecords.length}일`;
+  const total = monthRecords.reduce((sum, item) => sum + item.work, 0);
+  const pay = monthRecords.reduce((sum, item) => sum + payOf(item), 0);
+  const sitesUsed = new Set(monthRecords.map((item) => item.site));
+  const days = new Set(monthRecords.map((item) => item.date));
+  $("#summaryLabel").textContent = currentWorker === "all"
+    ? (workers.length > 1 ? `${viewDate.getMonth() + 1}월 예상 급여 · 전체 ${workers.length}명` : `${viewDate.getMonth() + 1}월 예상 급여`)
+    : `${viewDate.getMonth() + 1}월 예상 급여 · ${workerName(currentWorker)}`;
+  $("#salaryTotal").textContent = hideMoney ? "•••••••" : formatNum(pay);
+  $("#daysTotal").textContent = `${days.size}일`;
   $("#workTotal").textContent = total.toFixed(1);
-  $("#siteTotal").textContent = `${sites.size}곳`;
+  $("#siteTotal").textContent = `${sitesUsed.size}곳`;
 }
 
 function renderRecent(showAll = false) {
-  const items = getMonthRecords().slice().sort((a, b) => b.date.localeCompare(a.date));
+  const items = getMonthRecords().slice().sort((a, b) => b.date.localeCompare(a.date) || workerName(a.worker).localeCompare(workerName(b.worker)));
   const recordList = $("#recordList");
   recordList.innerHTML = "";
   items.slice(0, showAll ? items.length : 3).forEach((item) => {
@@ -123,51 +189,76 @@ function renderRecent(showAll = false) {
     row.className = "record-item";
     row.innerHTML = `
       <span class="record-date"><strong>${date.getDate()}</strong><span>${new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(date)}</span></span>
-      <span class="record-info"><strong>${escapeHtml(item.site)}</strong><span>${escapeHtml(item.memo) || "메모 없음"}</span></span>
-      <span class="record-work"><strong>${item.work.toFixed(1)} 공수</strong><span>${hideMoney ? "금액 숨김" : formatWon(item.work * dailyRate)}</span></span>
+      <span class="record-info"><strong><em class="record-worker">${escapeHtml(workerName(item.worker))}</em>${escapeHtml(item.site)}</strong><span>${escapeHtml(item.memo) || "메모 없음"}</span></span>
+      <span class="record-work"><strong>${item.work.toFixed(1)} 공수</strong><span>${hideMoney ? "금액 숨김" : formatWon(payOf(item))}</span></span>
       <span class="record-actions">
         <button class="record-edit" type="button" aria-label="${koreanDate(date)} 기록 수정">수정</button>
         <button class="record-delete" type="button" aria-label="${koreanDate(date)} 기록 삭제">삭제</button>
       </span>`;
-    row.addEventListener("click", (event) => { if (!event.target.closest(".record-delete")) openWorkDialog(date, item); });
-    row.querySelector(".record-delete").addEventListener("click", () => deleteRecord(item.date));
+    row.addEventListener("click", (event) => { if (!event.target.closest(".record-delete")) openWorkDialog(date, item.worker); });
+    row.querySelector(".record-delete").addEventListener("click", () => deleteRecord(item.date, item.worker));
     recordList.appendChild(row);
   });
   if (!items.length) recordList.innerHTML = `<div class="panel-card"><div><strong>아직 기록이 없습니다</strong><span>달력에서 날짜를 눌러 첫 공수를 기록해보세요.</span></div></div>`;
 }
 
-function openWorkDialog(date, record) {
+// ── 공수 입력/수정 창 ──
+function fillSelect(select, list, selected) {
+  const names = list.map((item) => item.name);
+  if (selected && !names.includes(selected)) names.push(selected);
+  select.innerHTML = names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  if (selected) select.value = selected;
+}
+
+function openWorkDialog(date, workerId) {
+  const key = dateKey(date);
+  let worker = workerId || (currentWorker !== "all" ? currentWorker : null);
+  if (!worker) worker = (workers.find((w) => !findRecord(key, w.id)) || workers[0]).id;
+  $("#selectedDate").value = key;
   $("#dialogDate").textContent = koreanDate(date);
-  $("#selectedDate").value = dateKey(date);
+  $("#workerInput").innerHTML = workers.map((w) => `<option value="${w.id}">${escapeHtml(w.name)}</option>`).join("");
+  $("#workerInput").value = worker;
+  loadWorkForm();
+  if (!$("#workDialog").open) $("#workDialog").showModal();
+}
+
+// 선택한 날짜 + 근무자의 기록을 창에 채움 (없으면 새 기록)
+function loadWorkForm() {
+  const key = $("#selectedDate").value;
+  const worker = $("#workerInput").value;
+  const record = findRecord(key, worker);
   const editing = Boolean(record);
   $("#dialogEyebrow").textContent = editing ? "기록 수정" : "공수 기록";
   $("#saveRecordButton").textContent = editing ? "수정 저장" : "기록 저장";
   $("#deleteRecordButton").hidden = !editing;
-  $("#siteInput").value = record?.site || "반포 재건축 현장";
+  fillSelect($("#siteInput"), sites, record?.site || sites[0]?.name);
   $("#memoInput").value = record?.memo || "";
   const work = record?.work || 1;
   document.querySelectorAll('input[name="work"]').forEach((input) => { input.checked = Number(input.value) === work; });
   updateDayPay();
-  $("#workDialog").showModal();
 }
 
 function updateDayPay() {
   const work = Number(document.querySelector('input[name="work"]:checked').value);
-  $("#dayPay").textContent = formatWon(work * dailyRate);
+  const rate = workerById($("#workerInput").value)?.rate ?? dailyRate;
+  $("#dayPay").textContent = formatWon(work * rate);
 }
 
 async function saveRecord(event) {
   event.preventDefault();
   const date = $("#selectedDate").value;
+  const worker = $("#workerInput").value;
+  if (!$("#siteInput").value) { showToast("설정에서 작업 현장을 먼저 추가해 주세요"); return; }
   const next = {
     date,
+    worker,
     work: Number(document.querySelector('input[name="work"]:checked').value),
     site: $("#siteInput").value,
     memo: $("#memoInput").value.trim()
   };
-  const index = records.findIndex((item) => item.date === date);
+  const index = records.findIndex((item) => item.date === date && item.worker === worker);
   if (index >= 0) {
-    const ok = await askPasscode({ title: "기록 수정", message: `${koreanDate(new Date(`${date}T00:00:00`))} 기록을 수정하려면 비밀번호를 입력해 주세요.`, confirm: "수정" });
+    const ok = await askPasscode({ title: "기록 수정", message: `${workerName(worker)}님 ${koreanDate(new Date(`${date}T00:00:00`))} 기록을 수정하려면 비밀번호를 입력해 주세요.`, confirm: "수정" });
     if (!ok) return;
     records[index] = next;
   } else {
@@ -179,11 +270,11 @@ async function saveRecord(event) {
   showToast(index >= 0 ? "기록을 수정했습니다" : "공수 기록을 저장했습니다");
 }
 
-async function deleteRecord(date) {
+async function deleteRecord(date, worker) {
   const label = koreanDate(new Date(`${date}T00:00:00`));
-  const ok = await askPasscode({ title: "기록 삭제", message: `${label} 기록을 삭제할까요? 삭제한 기록은 되돌릴 수 없어요. 비밀번호를 입력해 주세요.`, confirm: "삭제", danger: true });
+  const ok = await askPasscode({ title: "기록 삭제", message: `${workerName(worker)}님 ${label} 기록을 삭제할까요? 삭제한 기록은 되돌릴 수 없어요. 비밀번호를 입력해 주세요.`, confirm: "삭제", danger: true });
   if (!ok) return;
-  records = records.filter((item) => item.date !== date);
+  records = records.filter((item) => !(item.date === date && item.worker === worker));
   saveRecords();
   if ($("#workDialog").open) $("#workDialog").close();
   renderCalendar();
@@ -224,23 +315,104 @@ async function submitPin(event) {
   requestAnimationFrame(() => dialog.classList.add("shake"));
 }
 
+// ── 근무자 · 현장 추가/수정 창 ──
+let itemEditing = null; // { kind: "worker" | "site", index: number | -1 }
+function openItemDialog(kind, index = -1) {
+  itemEditing = { kind, index };
+  const isWorker = kind === "worker";
+  const item = index >= 0 ? (isWorker ? workers[index] : sites[index]) : null;
+  $("#itemEyebrow").textContent = isWorker ? "근무자" : "작업 현장";
+  $("#itemTitle").textContent = `${isWorker ? "근무자" : "현장"} ${item ? "수정" : "추가"}`;
+  $("#itemNameLabel").textContent = isWorker ? "이름" : "현장 이름";
+  $("#itemNameInput").placeholder = isWorker ? "예: 홍길동" : "예: 천안 아파트 신축 현장";
+  $("#itemNameInput").value = item?.name || "";
+  $("#itemExtraLabel").textContent = isWorker ? "1공수 단가 (원)" : "위치 (선택)";
+  const extra = $("#itemExtraInput");
+  extra.inputMode = isWorker ? "numeric" : "text";
+  extra.placeholder = isWorker ? "예: 170000" : "예: 충남 천안시";
+  extra.value = isWorker ? String(item?.rate ?? dailyRate) : (item?.area || "");
+  $("#itemError").textContent = "";
+  const inUse = item && records.some((r) => (isWorker ? r.worker === item.id : r.site === item.name));
+  $("#itemDelete").hidden = !item || inUse || (isWorker && workers.length < 2);
+  $("#itemDialog").showModal();
+  setTimeout(() => $("#itemNameInput").focus(), 50);
+}
+
+function saveItem(event) {
+  event.preventDefault();
+  const { kind, index } = itemEditing;
+  const isWorker = kind === "worker";
+  const name = $("#itemNameInput").value.trim();
+  const extra = $("#itemExtraInput").value.trim();
+  const list = isWorker ? workers : sites;
+  if (!name) { $("#itemError").textContent = `${isWorker ? "이름" : "현장 이름"}을 입력해 주세요.`; return; }
+  if (list.some((item, i) => i !== index && item.name === name)) { $("#itemError").textContent = "같은 이름이 이미 있어요."; return; }
+  if (isWorker) {
+    const rate = Number(extra.replace(/[^0-9]/g, ""));
+    if (!rate) { $("#itemError").textContent = "1공수 단가를 숫자로 입력해 주세요."; return; }
+    if (index >= 0) Object.assign(workers[index], { name, rate });
+    else workers.push({ id: newId(), name, rate });
+    saveWorkers();
+  } else {
+    if (index >= 0) {
+      const oldName = sites[index].name;
+      sites[index] = { name, area: extra };
+      // 현장 이름을 바꾸면 이미 입력된 기록도 새 이름으로 바꿈
+      if (oldName !== name) { records.forEach((r) => { if (r.site === oldName) r.site = name; }); saveRecords(); }
+    } else {
+      sites.push({ name, area: extra });
+    }
+    saveSites();
+  }
+  $("#itemDialog").close();
+  renderCalendar();
+  refreshOpenPanel();
+  showToast(`${name} ${index >= 0 ? "수정" : "추가"} 완료`);
+}
+
+function deleteItem() {
+  const { kind, index } = itemEditing;
+  const list = kind === "worker" ? workers : sites;
+  const [removed] = list.splice(index, 1);
+  if (kind === "worker") {
+    saveWorkers();
+    if (currentWorker === removed.id) { currentWorker = "all"; localStorage.setItem(CURRENT_WORKER_KEY, "all"); }
+  } else {
+    saveSites();
+  }
+  $("#itemDialog").close();
+  renderCalendar();
+  refreshOpenPanel();
+  showToast(`${removed.name} 삭제 완료`);
+}
+
 // ── 카카오톡 공유 ──
 function buildMonthReport() {
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth() + 1;
-  const items = getMonthRecords().slice().sort((a, b) => a.date.localeCompare(b.date));
-  const total = items.reduce((sum, item) => sum + Number(item.work), 0);
-  const sites = new Set(items.map((item) => item.site));
+  const items = getMonthRecords().slice().sort((a, b) => a.date.localeCompare(b.date) || workerName(a.worker).localeCompare(workerName(b.worker)));
+  const total = items.reduce((sum, item) => sum + item.work, 0);
+  const pay = items.reduce((sum, item) => sum + payOf(item), 0);
+  const sitesUsed = new Set(items.map((item) => item.site));
+  const days = new Set(items.map((item) => item.date));
   const weekday = new Intl.DateTimeFormat("ko-KR", { weekday: "short" });
-  const summary = `근무 ${items.length}일 · 총 ${total.toFixed(1)}공수 · 현장 ${sites.size}곳`;
-  const pay = hideMoney ? "" : `예상 급여 ${formatWon(total * dailyRate)}`;
+  const multi = currentWorker === "all" && workers.length > 1;
+  const who = currentWorker === "all" ? (multi ? " (전체)" : "") : ` · ${workerName(currentWorker)}`;
+  const summary = `근무 ${days.size}일 · 총 ${total.toFixed(1)}공수 · 현장 ${sitesUsed.size}곳`;
+  const payLine = hideMoney ? "" : `예상 급여 ${formatWon(pay)}`;
+  const perWorker = multi ? workers.map((w) => {
+    const mine = items.filter((item) => item.worker === w.id);
+    if (!mine.length) return "";
+    const t = mine.reduce((s, item) => s + item.work, 0);
+    return `- ${w.name}: ${t.toFixed(1)}공수${hideMoney ? "" : ` / ${formatWon(mine.reduce((s, item) => s + payOf(item), 0))}`}`;
+  }).filter(Boolean) : [];
   const lines = items.map((item) => {
     const d = new Date(`${item.date}T00:00:00`);
-    return `${month}/${d.getDate()}(${weekday.format(d)}) ${item.work.toFixed(1)}공수 · ${item.site}${item.memo ? ` · ${item.memo}` : ""}`;
+    return `${month}/${d.getDate()}(${weekday.format(d)})${multi ? ` ${workerName(item.worker)}` : ""} ${item.work.toFixed(1)}공수${hideMoney ? "" : ` ${formatNum(payOf(item))}원`} · ${item.site}${item.memo ? ` · ${item.memo}` : ""}`;
   });
-  const title = `[매일공수대장] ${year}년 ${month}월 공수`;
-  const full = [title, summary, pay, "", ...(lines.length ? lines : ["입력된 기록이 없습니다."]), "", APP_URL].filter((line, i, arr) => line !== "" || arr[i - 1] !== "").join("\n");
-  const short = [title, summary, pay].filter(Boolean).join("\n");
+  const title = `[매일공수대장] ${year}년 ${month}월 공수${who}`;
+  const full = [title, summary, payLine, ...perWorker, "", ...(lines.length ? lines : ["입력된 기록이 없습니다."]), "", APP_URL].filter((line, i, arr) => line !== "" || arr[i - 1] !== "").join("\n");
+  const short = [title, summary, payLine].filter(Boolean).join("\n");
   return { title, full, short };
 }
 
@@ -287,33 +459,65 @@ async function shareMonth() {
   }
 }
 
+let currentPanel = null;
+function refreshOpenPanel() {
+  if ($("#panelDialog").open && currentPanel) openPanel(currentPanel);
+}
+
 function openPanel(page) {
+  currentPanel = page;
   const panel = $("#panelContent");
+  const monthLabel = `${viewDate.getMonth() + 1}월`;
   if (page === "payroll") {
-    $("#panelEyebrow").textContent = "이번 달 정산";
+    $("#panelEyebrow").textContent = `${monthLabel} 정산`;
     $("#panelTitle").textContent = "급여 정산";
-    const total = getMonthRecords().reduce((sum, item) => sum + item.work, 0);
-    panel.innerHTML = `<div class="panel-stack">
-      <div class="panel-card"><div><strong>기본 급여</strong><span>${total.toFixed(1)} 공수 × ${formatWon(dailyRate)}</span></div><b>${formatWon(total * dailyRate)}</b></div>
-      <div class="panel-card"><div><strong>공제 전 예상 금액</strong><span>실제 지급액은 현장 정산에 따라 달라질 수 있어요.</span></div><b>${formatWon(total * dailyRate)}</b></div>
+    const monthRecords = getMonthRecords();
+    const shown = currentWorker === "all" ? workers : workers.filter((w) => w.id === currentWorker);
+    const rows = shown.map((w) => {
+      const mine = monthRecords.filter((r) => r.worker === w.id);
+      const t = mine.reduce((s, r) => s + r.work, 0);
+      return `<div class="panel-card"><div><strong>${escapeHtml(w.name)}</strong><span>${t.toFixed(1)} 공수 × ${formatWon(w.rate)}</span></div><b>${formatWon(t * w.rate)}</b></div>`;
+    }).join("");
+    const total = monthRecords.reduce((s, r) => s + payOf(r), 0);
+    panel.innerHTML = `<div class="panel-stack">${rows}
+      <div class="panel-card total"><div><strong>공제 전 예상 합계</strong><span>실제 지급액은 현장 정산에 따라 달라질 수 있어요.</span></div><b>${formatWon(total)}</b></div>
     </div>`;
   } else if (page === "sites") {
-    $("#panelEyebrow").textContent = "내 작업 현장";
+    $("#panelEyebrow").textContent = "작업 현장";
     $("#panelTitle").textContent = "현장 관리";
-    panel.innerHTML = `<div class="panel-stack">${["반포 재건축 현장","성수 오피스 현장","마곡 물류센터"].map((site, index) => `<div class="panel-card"><div><strong>${site}</strong><span>${["서울 서초구","서울 성동구","서울 강서구"][index]}</span></div><b>${records.filter((r) => r.site === site).length}일</b></div>`).join("")}</div>`;
+    const monthRecords = getMonthRecords();
+    panel.innerHTML = `<div class="panel-stack">${sites.map((site, index) => `
+      <button type="button" class="panel-card panel-edit" data-site="${index}"><div><strong>${escapeHtml(site.name)}</strong><span>${escapeHtml(site.area) || "위치 미입력"} · ${monthLabel} ${new Set(monthRecords.filter((r) => r.site === site.name).map((r) => r.date)).size}일</span></div><b class="edit-chip">수정</b></button>`).join("")}
+      <button type="button" class="add-row" id="panelAddSite">+ 작업 현장 추가</button></div>`;
+    panel.querySelectorAll("[data-site]").forEach((b) => b.addEventListener("click", () => openItemDialog("site", Number(b.dataset.site))));
+    $("#panelAddSite").addEventListener("click", () => openItemDialog("site"));
   } else {
     $("#panelEyebrow").textContent = "나에게 맞게";
-    $("#panelTitle").textContent = "급여 설정";
-    panel.innerHTML = `<div class="panel-stack"><label class="panel-card"><div><strong>1공수 기본 단가</strong><span>모든 예상 급여에 적용됩니다.</span></div><input class="settings-rate" id="rateInput" inputmode="numeric" value="${dailyRate}" aria-label="1공수 기본 단가" /></label><button class="primary-button" id="saveRate" type="button">단가 저장</button></div>`;
-    setTimeout(() => $("#saveRate").addEventListener("click", () => {
-      dailyRate = Math.max(0, Number($("#rateInput").value) || 0);
+    $("#panelTitle").textContent = "설정";
+    panel.innerHTML = `<div class="panel-stack">
+      <h3 class="settings-heading">근무자 <small>${workers.length}명</small></h3>
+      ${workers.map((w, index) => `<button type="button" class="panel-card panel-edit" data-worker-index="${index}"><div><strong>${escapeHtml(w.name)}</strong><span>1공수 ${formatWon(w.rate)}</span></div><b class="edit-chip">수정</b></button>`).join("")}
+      <button type="button" class="add-row" id="settingsAddWorker">+ 근무자 추가</button>
+
+      <h3 class="settings-heading">작업 현장 <small>${sites.length}곳</small></h3>
+      ${sites.map((s, index) => `<button type="button" class="panel-card panel-edit" data-site-index="${index}"><div><strong>${escapeHtml(s.name)}</strong><span>${escapeHtml(s.area) || "위치 미입력"}</span></div><b class="edit-chip">수정</b></button>`).join("")}
+      <button type="button" class="add-row" id="settingsAddSite">+ 작업 현장 추가</button>
+
+      <h3 class="settings-heading">새 근무자 기본 단가</h3>
+      <label class="panel-card"><div><strong>1공수 기본 단가</strong><span>근무자를 새로 추가할 때 먼저 채워져요.</span></div><input class="settings-rate" id="rateInput" inputmode="numeric" value="${dailyRate}" aria-label="1공수 기본 단가" /></label>
+      <button class="primary-button" id="saveRate" type="button">기본 단가 저장</button>
+    </div>`;
+    panel.querySelectorAll("[data-worker-index]").forEach((b) => b.addEventListener("click", () => openItemDialog("worker", Number(b.dataset.workerIndex))));
+    panel.querySelectorAll("[data-site-index]").forEach((b) => b.addEventListener("click", () => openItemDialog("site", Number(b.dataset.siteIndex))));
+    $("#settingsAddWorker").addEventListener("click", () => openItemDialog("worker"));
+    $("#settingsAddSite").addEventListener("click", () => openItemDialog("site"));
+    $("#saveRate").addEventListener("click", () => {
+      dailyRate = Math.max(0, Number($("#rateInput").value.replace(/[^0-9]/g, "")) || 0);
       localStorage.setItem(DAILY_RATE_KEY, String(dailyRate));
-      renderCalendar();
-      $("#panelDialog").close();
       showToast("기본 단가를 저장했습니다");
-    }), 0);
+    });
   }
-  $("#panelDialog").showModal();
+  if (!$("#panelDialog").open) $("#panelDialog").showModal();
 }
 
 let toastTimer;
@@ -328,8 +532,12 @@ function showToast(message) {
 $("#prevMonth").addEventListener("click", () => { viewDate.setMonth(viewDate.getMonth() - 1); renderCalendar(); });
 $("#nextMonth").addEventListener("click", () => { viewDate.setMonth(viewDate.getMonth() + 1); renderCalendar(); });
 $("#monthTitle").addEventListener("click", () => { viewDate = new Date(today.getFullYear(), today.getMonth(), 1); renderCalendar(); });
-$("#todayButton").addEventListener("click", () => { viewDate = new Date(today.getFullYear(), today.getMonth(), 1); renderCalendar(); openWorkDialog(today, records.find((item) => item.date === dateKey(today))); });
-$("#addWorkButton").addEventListener("click", () => openWorkDialog(today, records.find((item) => item.date === dateKey(today))));
+$("#todayButton").addEventListener("click", () => { viewDate = new Date(today.getFullYear(), today.getMonth(), 1); renderCalendar(); openWorkDialog(today); });
+$("#addWorkButton").addEventListener("click", () => openWorkDialog(today));
+$("#workerInput").addEventListener("change", loadWorkForm);
+$("#itemForm").addEventListener("submit", saveItem);
+$("#itemClose").addEventListener("click", () => $("#itemDialog").close());
+$("#itemDelete").addEventListener("click", deleteItem);
 $("#privacyButton").addEventListener("click", () => { hideMoney = !hideMoney; renderCalendar(); });
 $("#viewAllButton").addEventListener("click", () => {
   const expanded = $("#viewAllButton").dataset.expanded === "true";
@@ -347,7 +555,7 @@ $("#menuInstall").addEventListener("click", () => { $("#menuDialog").close(); ad
 $("#menuShare").addEventListener("click", () => { $("#menuDialog").close(); shareMonth(); });
 $("#menuRecords").addEventListener("click", () => { $("#menuDialog").close(); showAllRecords(); });
 $("#shareButton").addEventListener("click", shareMonth);
-$("#deleteRecordButton").addEventListener("click", () => deleteRecord($("#selectedDate").value));
+$("#deleteRecordButton").addEventListener("click", () => deleteRecord($("#selectedDate").value, $("#workerInput").value));
 $("#pinForm").addEventListener("submit", submitPin);
 $("#pinCancel").addEventListener("click", () => finishPasscode(false));
 $("#pinClose").addEventListener("click", () => finishPasscode(false));
@@ -457,7 +665,7 @@ function handleShortcut() {
   const action = new URLSearchParams(location.search).get("action");
   if (action === "install" && !isInstalled()) { openInstallDialog(); return; }
   if (action === "add" && !$("#workDialog").open) {
-    openWorkDialog(today, records.find((item) => item.date === dateKey(today)));
+    openWorkDialog(today);
   }
 }
 
@@ -477,7 +685,7 @@ function pushBackGuard() {
 function stepBack() {
   if ($("#pinDialog").open) { finishPasscode(false); return true; }
   if ($("#exitDialog").open) { $("#exitDialog").close(); return true; }
-  for (const id of ["#workDialog", "#installDialog", "#panelDialog", "#menuDialog"]) {
+  for (const id of ["#itemDialog", "#workDialog", "#installDialog", "#panelDialog", "#menuDialog"]) {
     if ($(id).open) { $(id).close(); return true; }
   }
   if (document.body.classList.contains("locked")) return false;

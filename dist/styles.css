@@ -282,3 +282,31 @@ select:focus, input[type="text"]:focus { border-color: var(--green-700); box-sha
 .exit-body img { display: block; margin: 0 auto 14px; border-radius: 16px; }
 .exit-body h2 { margin: 0; font-size: 1.15rem; letter-spacing: -.04em; }
 .exit-body p { margin: 8px 0 0; color: var(--muted); font-size: .8rem; }
+
+/* 근무자 탭 */
+.worker-tabs { display: flex; gap: 8px; overflow-x: auto; margin: 14px 14px 0; padding: 2px 2px 4px; scrollbar-width: none; }
+.worker-tabs::-webkit-scrollbar { display: none; }
+.worker-tab { flex: none; height: 36px; padding: 0 15px; border-radius: 18px; border: 1px solid #d6dfd8; background: white; color: #4c574f; font-size: .8rem; font-weight: 700; white-space: nowrap; }
+.worker-tab.active { background: var(--green-800); border-color: var(--green-800); color: white; box-shadow: 0 6px 14px rgba(20,83,45,.2); }
+.worker-tab.add { border-style: dashed; color: var(--green-700); background: transparent; }
+
+/* 달력 금액 표시 */
+.calendar-day .work-badge { min-width: 0; max-width: calc(100% - 2px); padding: 2px 3px; font-size: .56rem; letter-spacing: -.03em; white-space: nowrap; overflow: hidden; }
+.work-badge.work-multi, .dot.multi { background: var(--green-700); }
+.people-count { display: block; margin-top: 1px; color: var(--green-700); font-size: .55rem; font-weight: 700; line-height: 1; }
+.legend { flex-wrap: wrap; row-gap: 6px; }
+.legend-note { margin: 10px 0 0; color: #8a948c; font-size: .66rem; text-align: center; }
+
+/* 기록 목록 근무자 이름 */
+.record-worker { font-style: normal; color: var(--green-700); margin-right: 6px; }
+
+/* 설정 */
+.settings-heading { margin: 10px 2px 0; font-size: .86rem; color: #3f4a42; }
+.settings-heading:first-child { margin-top: 0; }
+.settings-heading small { color: var(--muted); font-weight: 600; margin-left: 4px; }
+.panel-edit { width: 100%; text-align: left; color: var(--ink); font: inherit; }
+.edit-chip { font-size: .72rem; padding: 6px 11px; border-radius: 9px; background: white; border: 1px solid #dce3dd; color: var(--green-700) !important; }
+.add-row { height: 46px; border: 1px dashed #b7c9bc; border-radius: 14px; background: transparent; color: var(--green-700); font-weight: 800; font-size: .84rem; }
+.panel-card.total { background: var(--green-100); border-color: #cfe4d6; }
+.panel-dialog { max-height: 88vh; overflow-y: auto; }
+.item-dialog input[type="text"] { margin-bottom: 14px; }

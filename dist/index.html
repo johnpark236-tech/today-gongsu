@@ -16,7 +16,7 @@
     <link rel="manifest" href="./manifest.webmanifest?v=4" />
     <link rel="icon" type="image/svg+xml" href="./icons/app-icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./styles.css?v=5" />
+    <link rel="stylesheet" href="./styles.css?v=6" />
   </head>
   <body class="locked">
     <section class="auth-screen" id="authScreen" aria-labelledby="authTitle">
@@ -56,7 +56,7 @@
         <section class="summary" aria-labelledby="summary-title">
           <div class="summary-top">
             <div>
-              <p class="eyebrow">이번 달 예상 급여</p>
+              <p class="eyebrow" id="summaryLabel">이번 달 예상 급여</p>
               <h1 id="summary-title"><span id="salaryTotal">3,625,000</span><small>원</small></h1>
             </div>
             <button class="privacy-button" id="privacyButton" type="button" aria-label="금액 숨기기">
@@ -69,6 +69,8 @@
             <div><strong id="siteTotal">3곳</strong><span>현장</span></div>
           </div>
         </section>
+
+        <div class="worker-tabs" id="workerTabs" role="tablist" aria-label="근무자 선택"></div>
 
         <section class="calendar-card" aria-label="월간 공수 달력">
           <div class="month-controls">
@@ -84,11 +86,13 @@
             <span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span>
           </div>
           <div class="calendar" id="calendar"></div>
+          <p class="legend-note">달력의 숫자는 그날 예상 금액(원)이에요. 색은 공수를 뜻해요.</p>
           <div class="legend" aria-label="공수 색상 안내">
             <span><i class="dot half"></i>0.5</span>
             <span><i class="dot one"></i>1.0</span>
             <span><i class="dot one-half"></i>1.5</span>
             <span><i class="dot two"></i>2.0</span>
+            <span id="legendMulti" hidden><i class="dot multi"></i>여러 명</span>
           </div>
         </section>
 
@@ -128,6 +132,8 @@
           <button class="close-button" id="workClose" type="button" aria-label="닫기">×</button>
         </div>
         <input id="selectedDate" type="hidden" />
+        <label class="field-label" for="workerInput">근무자</label>
+        <select id="workerInput"></select>
         <fieldset>
           <legend>오늘의 공수</legend>
           <div class="work-options">
@@ -138,9 +144,7 @@
           </div>
         </fieldset>
         <label class="field-label" for="siteInput">현장</label>
-        <select id="siteInput">
-          <option>반포 재건축 현장</option><option>성수 오피스 현장</option><option>마곡 물류센터</option>
-        </select>
+        <select id="siteInput"></select>
         <label class="field-label" for="memoInput">메모</label>
         <input id="memoInput" type="text" placeholder="작업 내용이나 특이사항" maxlength="60" />
         <div class="pay-preview"><span>예상 일급</span><strong id="dayPay">200,000원</strong></div>
@@ -223,6 +227,25 @@
       </form>
     </dialog>
 
+    <dialog class="panel-dialog pin-dialog item-dialog" id="itemDialog">
+      <form id="itemForm">
+        <div class="dialog-handle"></div>
+        <div class="dialog-heading">
+          <div><p class="eyebrow" id="itemEyebrow">근무자</p><h2 id="itemTitle">근무자 추가</h2></div>
+          <button class="close-button" id="itemClose" type="button" aria-label="닫기">×</button>
+        </div>
+        <label class="field-label" for="itemNameInput" id="itemNameLabel">이름</label>
+        <input id="itemNameInput" type="text" maxlength="30" autocomplete="off" />
+        <label class="field-label" for="itemExtraInput" id="itemExtraLabel">1공수 단가 (원)</label>
+        <input id="itemExtraInput" type="text" maxlength="40" autocomplete="off" />
+        <p class="auth-error" id="itemError" role="alert" aria-live="polite"></p>
+        <div class="dialog-actions">
+          <button class="danger-button" id="itemDelete" type="button" hidden>삭제</button>
+          <button class="primary-button" type="submit">저장</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="panel-dialog pin-dialog exit-dialog" id="exitDialog">
       <div class="dialog-handle"></div>
       <div class="exit-body">
@@ -237,6 +260,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=5"></script>
+    <script src="./app.js?v=6"></script>
   </body>
 </html>
