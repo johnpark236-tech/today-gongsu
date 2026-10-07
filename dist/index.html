@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="현장 근무 공수와 예상 급여를 한눈에 기록하는 매일공수대장" />
+    <title>매일공수대장</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314532d'/%3E%3Cpath d='M18 15v8M46 15v8M14 24h36v27H14z' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m23 38 6 6 13-14' fill='none' stroke='%23fbbf24' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" type="button" aria-label="메뉴 열기" data-toast="메뉴는 준비 중입니다">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="brand" aria-label="매일공수대장">
+          <span class="brand-mark">매일</span><span>공수대장</span>
+        </div>
+        <button class="icon-btn" type="button" id="todayButton" aria-label="오늘로 이동">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M9 13h6M12 10v6"/></svg>
+        </button>
+      </header>
+
+      <main>
+        <section class="summary" aria-labelledby="summary-title">
+          <div class="summary-top">
+            <div>
+              <p class="eyebrow">이번 달 예상 급여</p>
+              <h1 id="summary-title"><span id="salaryTotal">3,625,000</span><small>원</small></h1>
+            </div>
+            <button class="privacy-button" id="privacyButton" type="button" aria-label="금액 숨기기">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+            </button>
+          </div>
+          <div class="summary-grid">
+            <div><strong id="daysTotal">14일</strong><span>근무일</span></div>
+            <div><strong id="workTotal">18.5</strong><span>총 공수</span></div>
+            <div><strong id="siteTotal">3곳</strong><span>현장</span></div>
+          </div>
+        </section>
+
+        <section class="calendar-card" aria-label="월간 공수 달력">
+          <div class="month-controls">
+            <button class="month-arrow" id="prevMonth" type="button" aria-label="이전 달">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <button class="month-title" id="monthTitle" type="button" aria-label="오늘이 있는 달로 이동">2026년 10월</button>
+            <button class="month-arrow" id="nextMonth" type="button" aria-label="다음 달">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+          <div class="weekdays" aria-hidden="true">
+            <span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span>
+          </div>
+          <div class="calendar" id="calendar"></div>
+          <div class="legend" aria-label="공수 색상 안내">
+            <span><i class="dot half"></i>0.5</span>
+            <span><i class="dot one"></i>1.0</span>
+            <span><i class="dot one-half"></i>1.5</span>
+            <span><i class="dot two"></i>2.0</span>
+          </div>
+        </section>
+
+        <section class="recent-section" aria-labelledby="recent-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">최근 기록</p><h2 id="recent-title">오늘도 수고하셨어요</h2></div>
+            <button class="text-button" id="viewAllButton" type="button">전체 보기</button>
+          </div>
+          <div class="record-list" id="recordList"></div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="주요 메뉴">
+        <button class="nav-item active" type="button" data-page="calendar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></svg><span>공수달력</span>
+        </button>
+        <button class="nav-item" type="button" data-page="payroll">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM7 9h5M7 13h3M16 10v4M14 12h4"/></svg><span>급여정산</span>
+        </button>
+        <button class="add-work" id="addWorkButton" type="button" aria-label="공수 기록 추가">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="nav-item" type="button" data-page="sites">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M5 20V8l7-4 7 4v12M9 20v-5h6v5M8 10h.01M12 10h.01M16 10h.01"/></svg><span>현장관리</span>
+        </button>
+        <button class="nav-item" type="button" data-page="settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.1.4.3.7.6 1 .3.2.7.4 1.1.4H21v4h-.09c-.4 0-.8.2-1.1.4-.2.1-.3.2-.4.2Z"/></svg><span>설정</span>
+        </button>
+      </nav>
+    </div>
+
+    <dialog class="work-dialog" id="workDialog">
+      <form method="dialog" id="workForm">
+        <div class="dialog-handle"></div>
+        <div class="dialog-heading">
+          <div><p class="eyebrow">공수 기록</p><h2 id="dialogDate">10월 7일 수요일</h2></div>
+          <button class="close-button" id="workClose" type="button" aria-label="닫기">×</button>
+        </div>
+        <input id="selectedDate" type="hidden" />
+        <fieldset>
+          <legend>오늘의 공수</legend>
+          <div class="work-options">
+            <label><input type="radio" name="work" value="0.5" /><span>0.5</span></label>
+            <label><input type="radio" name="work" value="1" checked /><span>1.0</span></label>
+            <label><input type="radio" name="work" value="1.5" /><span>1.5</span></label>
+            <label><input type="radio" name="work" value="2" /><span>2.0</span></label>
+          </div>
+        </fieldset>
+        <label class="field-label" for="siteInput">현장</label>
+        <select id="siteInput">
+          <option>반포 재건축 현장</option><option>성수 오피스 현장</option><option>마곡 물류센터</option>
+        </select>
+        <label class="field-label" for="memoInput">메모</label>
+        <input id="memoInput" type="text" placeholder="작업 내용이나 특이사항" maxlength="60" />
+        <div class="pay-preview"><span>예상 일급</span><strong id="dayPay">200,000원</strong></div>
+        <button class="primary-button" value="default" type="submit">기록 저장</button>
+      </form>
+    </dialog>
+
+    <dialog class="panel-dialog" id="panelDialog">
+      <div class="dialog-handle"></div>
+      <div class="dialog-heading">
+        <div><p class="eyebrow" id="panelEyebrow">급여 관리</p><h2 id="panelTitle">급여 정산</h2></div>
+        <button class="close-button" id="panelClose" type="button" aria-label="닫기">×</button>
+      </div>
+      <div id="panelContent"></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
