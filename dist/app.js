@@ -8,6 +8,10 @@ let viewDate = new Date(today.getFullYear(), today.getMonth(), 1);
 let dailyRate = Number(localStorage.getItem(DAILY_RATE_KEY)) || 200000;
 let hideMoney = false;
 let installPrompt = null;
+// 카카오 디벨로퍼스에서 발급받은 JavaScript 키를 넣으면 카카오톡 공유창이 바로 열립니다.
+// 비워두면 휴대폰 기본 공유창(카카오톡 포함)이 열립니다.
+const KAKAO_JS_KEY = "";
+const APP_URL = new URL("./", location.href).href;
 
 const seedRecords = [
   ["2026-10-01", 1, "반포 재건축 현장", "형틀 작업"],
@@ -34,6 +38,8 @@ let records = (() => {
 const $ = (selector) => document.querySelector(selector);
 const formatWon = (value) => `${Math.round(value).toLocaleString("ko-KR")}원`;
 const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+const saveRecords = () => localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
 const koreanDate = (date) => new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "long" }).format(date);
 
 async function hashText(value) {
@@ -94,7 +100,7 @@ function renderCalendar() {
     calendar.appendChild(button);
   }
   renderSummary();
-  renderRecent();
+  renderRecent($("#viewAllButton").dataset.expanded === "true");
 }
 
 function renderSummary() {
@@ -113,14 +119,18 @@ function renderRecent(showAll = false) {
   recordList.innerHTML = "";
   items.slice(0, showAll ? items.length : 3).forEach((item) => {
     const date = new Date(`${item.date}T00:00:00`);
-    const row = document.createElement("button");
-    row.type = "button";
+    const row = document.createElement("div");
     row.className = "record-item";
     row.innerHTML = `
       <span class="record-date"><strong>${date.getDate()}</strong><span>${new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(date)}</span></span>
-      <span class="record-info"><strong>${item.site}</strong><span>${item.memo || "메모 없음"}</span></span>
-      <span class="record-work"><strong>${item.work.toFixed(1)} 공수</strong><span>${hideMoney ? "금액 숨김" : formatWon(item.work * dailyRate)}</span></span>`;
-    row.addEventListener("click", () => openWorkDialog(date, item));
+      <span class="record-info"><strong>${escapeHtml(item.site)}</strong><span>${escapeHtml(item.memo) || "메모 없음"}</span></span>
+      <span class="record-work"><strong>${item.work.toFixed(1)} 공수</strong><span>${hideMoney ? "금액 숨김" : formatWon(item.work * dailyRate)}</span></span>
+      <span class="record-actions">
+        <button class="record-edit" type="button" aria-label="${koreanDate(date)} 기록 수정">수정</button>
+        <button class="record-delete" type="button" aria-label="${koreanDate(date)} 기록 삭제">삭제</button>
+      </span>`;
+    row.addEventListener("click", (event) => { if (!event.target.closest(".record-delete")) openWorkDialog(date, item); });
+    row.querySelector(".record-delete").addEventListener("click", () => deleteRecord(item.date));
     recordList.appendChild(row);
   });
   if (!items.length) recordList.innerHTML = `<div class="panel-card"><div><strong>아직 기록이 없습니다</strong><span>달력에서 날짜를 눌러 첫 공수를 기록해보세요.</span></div></div>`;
@@ -129,6 +139,10 @@ function renderRecent(showAll = false) {
 function openWorkDialog(date, record) {
   $("#dialogDate").textContent = koreanDate(date);
   $("#selectedDate").value = dateKey(date);
+  const editing = Boolean(record);
+  $("#dialogEyebrow").textContent = editing ? "기록 수정" : "공수 기록";
+  $("#saveRecordButton").textContent = editing ? "수정 저장" : "기록 저장";
+  $("#deleteRecordButton").hidden = !editing;
   $("#siteInput").value = record?.site || "반포 재건축 현장";
   $("#memoInput").value = record?.memo || "";
   const work = record?.work || 1;
@@ -142,7 +156,7 @@ function updateDayPay() {
   $("#dayPay").textContent = formatWon(work * dailyRate);
 }
 
-function saveRecord(event) {
+async function saveRecord(event) {
   event.preventDefault();
   const date = $("#selectedDate").value;
   const next = {
@@ -152,11 +166,125 @@ function saveRecord(event) {
     memo: $("#memoInput").value.trim()
   };
   const index = records.findIndex((item) => item.date === date);
-  if (index >= 0) records[index] = next; else records.push(next);
-  localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+  if (index >= 0) {
+    const ok = await askPasscode({ title: "기록 수정", message: `${koreanDate(new Date(`${date}T00:00:00`))} 기록을 수정하려면 비밀번호를 입력해 주세요.`, confirm: "수정" });
+    if (!ok) return;
+    records[index] = next;
+  } else {
+    records.push(next);
+  }
+  saveRecords();
   $("#workDialog").close();
   renderCalendar();
-  showToast("공수 기록을 저장했습니다");
+  showToast(index >= 0 ? "기록을 수정했습니다" : "공수 기록을 저장했습니다");
+}
+
+async function deleteRecord(date) {
+  const label = koreanDate(new Date(`${date}T00:00:00`));
+  const ok = await askPasscode({ title: "기록 삭제", message: `${label} 기록을 삭제할까요? 삭제한 기록은 되돌릴 수 없어요. 비밀번호를 입력해 주세요.`, confirm: "삭제", danger: true });
+  if (!ok) return;
+  records = records.filter((item) => item.date !== date);
+  saveRecords();
+  if ($("#workDialog").open) $("#workDialog").close();
+  renderCalendar();
+  showToast("기록을 삭제했습니다");
+}
+
+// 수정·삭제 전에 비밀번호를 확인하는 팝업. 맞으면 true, 취소하면 false.
+let pinResolve = null;
+function askPasscode({ title, message, confirm = "확인", danger = false }) {
+  if (pinResolve) pinResolve(false);
+  $("#pinTitle").textContent = title;
+  $("#pinMessage").textContent = message;
+  $("#pinSubmit").textContent = confirm;
+  $("#pinSubmit").classList.toggle("danger", danger);
+  $("#pinError").textContent = "";
+  $("#pinInput").value = "";
+  $("#pinDialog").showModal();
+  setTimeout(() => $("#pinInput").focus(), 50);
+  return new Promise((resolve) => { pinResolve = resolve; });
+}
+
+function finishPasscode(result) {
+  const resolve = pinResolve;
+  pinResolve = null;
+  if ($("#pinDialog").open) $("#pinDialog").close();
+  if (resolve) resolve(result);
+}
+
+async function submitPin(event) {
+  event.preventDefault();
+  const input = $("#pinInput");
+  if (await hashText(input.value) === ACCESS_HASH) { finishPasscode(true); return; }
+  $("#pinError").textContent = "비밀번호가 맞지 않습니다.";
+  input.value = "";
+  input.focus();
+  const dialog = $("#pinDialog");
+  dialog.classList.remove("shake");
+  requestAnimationFrame(() => dialog.classList.add("shake"));
+}
+
+// ── 카카오톡 공유 ──
+function buildMonthReport() {
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth() + 1;
+  const items = getMonthRecords().slice().sort((a, b) => a.date.localeCompare(b.date));
+  const total = items.reduce((sum, item) => sum + Number(item.work), 0);
+  const sites = new Set(items.map((item) => item.site));
+  const weekday = new Intl.DateTimeFormat("ko-KR", { weekday: "short" });
+  const summary = `근무 ${items.length}일 · 총 ${total.toFixed(1)}공수 · 현장 ${sites.size}곳`;
+  const pay = hideMoney ? "" : `예상 급여 ${formatWon(total * dailyRate)}`;
+  const lines = items.map((item) => {
+    const d = new Date(`${item.date}T00:00:00`);
+    return `${month}/${d.getDate()}(${weekday.format(d)}) ${item.work.toFixed(1)}공수 · ${item.site}${item.memo ? ` · ${item.memo}` : ""}`;
+  });
+  const title = `[매일공수대장] ${year}년 ${month}월 공수`;
+  const full = [title, summary, pay, "", ...(lines.length ? lines : ["입력된 기록이 없습니다."]), "", APP_URL].filter((line, i, arr) => line !== "" || arr[i - 1] !== "").join("\n");
+  const short = [title, summary, pay].filter(Boolean).join("\n");
+  return { title, full, short };
+}
+
+let kakaoReady = null;
+function loadKakao() {
+  if (!KAKAO_JS_KEY) return Promise.resolve(false);
+  if (kakaoReady) return kakaoReady;
+  kakaoReady = new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js";
+    script.crossOrigin = "anonymous";
+    script.onload = () => {
+      try { if (!window.Kakao.isInitialized()) window.Kakao.init(KAKAO_JS_KEY); resolve(true); }
+      catch { resolve(false); }
+    };
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+  return kakaoReady;
+}
+
+async function shareMonth() {
+  const report = buildMonthReport();
+  if (await loadKakao()) {
+    try {
+      window.Kakao.Share.sendDefault({
+        objectType: "text",
+        text: report.short.slice(0, 200),
+        link: { mobileWebUrl: APP_URL, webUrl: APP_URL },
+        buttonTitle: "매일공수대장 열기"
+      });
+      return;
+    } catch { /* 아래 기본 공유로 넘어감 */ }
+  }
+  if (navigator.share) {
+    try { await navigator.share({ title: report.title, text: report.full }); return; }
+    catch (error) { if (error.name === "AbortError") return; }
+  }
+  try {
+    await navigator.clipboard.writeText(report.full);
+    showToast("이번 달 기록을 복사했어요. 카톡에 붙여넣기 하세요");
+  } catch {
+    showToast("공유를 지원하지 않는 브라우저입니다");
+  }
 }
 
 function openPanel(page) {
@@ -213,7 +341,17 @@ $("#workForm").addEventListener("submit", saveRecord);
 $("#workClose").addEventListener("click", () => $("#workDialog").close());
 document.querySelectorAll('input[name="work"]').forEach((input) => input.addEventListener("change", updateDayPay));
 $("#panelClose").addEventListener("click", () => $("#panelDialog").close());
-$("#menuButton").addEventListener("click", openInstallDialog);
+$("#menuButton").addEventListener("click", openMenu);
+$("#menuClose").addEventListener("click", () => $("#menuDialog").close());
+$("#menuInstall").addEventListener("click", () => { $("#menuDialog").close(); addToHomeScreen(); });
+$("#menuShare").addEventListener("click", () => { $("#menuDialog").close(); shareMonth(); });
+$("#menuRecords").addEventListener("click", () => { $("#menuDialog").close(); showAllRecords(); });
+$("#shareButton").addEventListener("click", shareMonth);
+$("#deleteRecordButton").addEventListener("click", () => deleteRecord($("#selectedDate").value));
+$("#pinForm").addEventListener("submit", submitPin);
+$("#pinCancel").addEventListener("click", () => finishPasscode(false));
+$("#pinClose").addEventListener("click", () => finishPasscode(false));
+$("#pinDialog").addEventListener("cancel", (event) => { event.preventDefault(); finishPasscode(false); });
 $("#installClose").addEventListener("click", () => $("#installDialog").close());
 $("#installButton").addEventListener("click", installApp);
 $("#authForm").addEventListener("submit", submitPasscode);
@@ -223,6 +361,36 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
   if (button.dataset.page !== "calendar") openPanel(button.dataset.page);
 }));
 renderCalendar();
+
+function openMenu() {
+  $("#menuShareMonth").textContent = `${viewDate.getMonth() + 1}월`;
+  $("#menuDialog").showModal();
+}
+
+function showAllRecords() {
+  const button = $("#viewAllButton");
+  button.dataset.expanded = "true";
+  button.textContent = "접기";
+  renderRecent(true);
+  $(".recent-section").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+const isKakaoInApp = () => /KAKAOTALK/i.test(navigator.userAgent);
+
+// 메뉴의 "홈 화면에 추가" 버튼
+function addToHomeScreen() {
+  if (isInstalled()) { showToast("이미 홈 화면 앱으로 실행 중이에요"); return; }
+  if (installPrompt) { installApp(); return; }
+  if (isKakaoInApp()) {
+    // 카카오톡 안의 브라우저는 홈 화면 추가를 지원하지 않아 기본 브라우저로 엽니다.
+    const target = new URL(APP_URL);
+    target.searchParams.set("action", "install");
+    showToast("기본 브라우저에서 열고 있어요");
+    location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(target.href)}`;
+    return;
+  }
+  openInstallDialog();
+}
 
 function isInstalled() {
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -242,6 +410,10 @@ function openInstallDialog() {
     button.textContent = "홈 화면에 앱 설치";
     button.disabled = false;
     status.textContent = "한 번 설치하면 일반 앱처럼 바로 열 수 있어요.";
+  } else if (isKakaoInApp()) {
+    button.textContent = "기본 브라우저에서 열기";
+    button.disabled = false;
+    status.textContent = "카카오톡 안에서는 설치가 안 돼요. 브라우저에서 연 뒤 설치하세요.";
   } else if (ios) {
     button.textContent = "아래 순서대로 설치하세요";
     button.disabled = true;
@@ -255,17 +427,18 @@ function openInstallDialog() {
 }
 
 async function installApp() {
-  if (!installPrompt) return;
+  if (!installPrompt) { if (isKakaoInApp()) { $("#installDialog").close(); addToHomeScreen(); } return; }
+  if ($("#installDialog").open) $("#installDialog").close();
   installPrompt.prompt();
   const choice = await installPrompt.userChoice;
   installPrompt = null;
-  $("#installDialog").close();
   showToast(choice.outcome === "accepted" ? "홈 화면에 앱을 설치했습니다" : "설치를 취소했습니다");
 }
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   installPrompt = event;
+  if ($("#installDialog").open) openInstallDialog();
 });
 
 window.addEventListener("appinstalled", () => {
@@ -278,7 +451,9 @@ if ("serviceWorker" in navigator) {
 }
 
 function handleShortcut() {
-  if (new URLSearchParams(location.search).get("action") === "add" && !$("#workDialog").open) {
+  const action = new URLSearchParams(location.search).get("action");
+  if (action === "install" && !isInstalled()) { openInstallDialog(); return; }
+  if (action === "add" && !$("#workDialog").open) {
     openWorkDialog(today, records.find((item) => item.date === dateKey(today)));
   }
 }

@@ -238,3 +238,41 @@ select:focus, input[type="text"]:focus { border-color: var(--green-700); box-sha
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* topbar actions */
+.topbar-actions { display: flex; align-items: center; gap: 2px; }
+
+/* record rows with edit / delete */
+.record-item { cursor: pointer; text-align: left; }
+.record-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: -2px; padding-top: 10px; border-top: 1px dashed #e3e8e4; }
+.record-actions button { height: 34px; padding: 0 14px; border-radius: 10px; font-size: .74rem; font-weight: 700; border: 1px solid #dce3dd; background: white; color: var(--ink); }
+.record-actions .record-delete { color: var(--red); border-color: #f4cdc8; background: #fff7f6; }
+
+/* dialog action rows */
+.dialog-actions { display: flex; gap: 10px; }
+.dialog-actions .primary-button { flex: 1; }
+.danger-button, .ghost-button { flex: none; width: 92px; height: 52px; border-radius: 14px; font-weight: 800; }
+.danger-button { border: 1px solid #f4cdc8; background: #fff3f1; color: var(--red); }
+.ghost-button { border: 1px solid #dce3dd; background: #f3f6f3; color: var(--muted); }
+.primary-button.danger { background: var(--red); }
+
+/* menu */
+.menu-dialog { min-height: 0; padding-bottom: max(28px, calc(16px + env(safe-area-inset-bottom))); }
+.menu-list { display: grid; gap: 10px; }
+.menu-item { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px; border: 1px solid #e0e5e1; border-radius: 16px; background: #f9fbf9; color: var(--ink); text-align: left; }
+.menu-item:active { background: var(--green-100); }
+.menu-item strong { display: block; font-size: .92rem; }
+.menu-item small { display: block; margin-top: 2px; color: var(--muted); font-size: .72rem; }
+.menu-item small span { display: inline; }
+.menu-icon { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 13px; background: var(--green-100); color: var(--green-800); }
+.menu-icon.kakao { background: #fee500; color: #191600; }
+.menu-icon.kakao svg { fill: currentColor; stroke: none; }
+
+/* passcode confirm */
+.pin-dialog { min-height: 0; padding-bottom: max(28px, calc(16px + env(safe-area-inset-bottom))); }
+.pin-dialog .dialog-heading { margin-bottom: 10px; }
+.pin-message { margin: 0 0 16px; color: var(--muted); font-size: .84rem; line-height: 1.5; }
+.pin-dialog.shake { animation: auth-shake .3s ease; }
+.topbar { grid-template-columns: 1fr auto 1fr; }
+.topbar .menu-btn { justify-self: start; }
+.topbar-actions { justify-self: end; }
