@@ -1,0 +1,38 @@
+{
+  "id": "./",
+  "name": "매일공수대장 - 공수·급여 기록",
+  "short_name": "매일공수대장",
+  "description": "현장 근무 공수와 예상 급여를 매일 간편하게 기록합니다.",
+  "lang": "ko-KR",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#f5f7f4",
+  "theme_color": "#14532d",
+  "categories": ["productivity", "finance", "utilities"],
+  "icons": [
+    {
+      "src": "./icons/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "오늘 공수 기록",
+      "short_name": "공수 기록",
+      "url": "./?action=add",
+      "icons": [{ "src": "./icons/app-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

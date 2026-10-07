@@ -2,20 +2,26 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#14532d" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="매일공수대장" />
     <meta name="description" content="현장 근무 공수와 예상 급여를 한눈에 기록하는 매일공수대장" />
     <title>매일공수대장</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314532d'/%3E%3Cpath d='M18 15v8M46 15v8M14 24h36v27H14z' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m23 38 6 6 13-14' fill='none' stroke='%23fbbf24' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="./icons/app-icon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <button class="icon-btn menu-btn" type="button" aria-label="메뉴 열기" data-toast="메뉴는 준비 중입니다">
+        <button class="icon-btn menu-btn" id="menuButton" type="button" aria-label="앱 메뉴 열기">
           <span></span><span></span><span></span>
         </button>
         <div class="brand" aria-label="매일공수대장">
@@ -129,6 +135,29 @@
         <button class="close-button" id="panelClose" type="button" aria-label="닫기">×</button>
       </div>
       <div id="panelContent"></div>
+    </dialog>
+
+    <dialog class="panel-dialog install-dialog" id="installDialog">
+      <div class="dialog-handle"></div>
+      <div class="dialog-heading">
+        <div><p class="eyebrow">휴대폰에서 더 편하게</p><h2>앱으로 사용하기</h2></div>
+        <button class="close-button" id="installClose" type="button" aria-label="닫기">×</button>
+      </div>
+      <div class="install-hero">
+        <img src="./icons/app-icon.svg" alt="" width="72" height="72" />
+        <div><strong>매일공수대장</strong><span id="installStatus">홈 화면에 설치하면 인터넷이 없어도 열 수 있어요.</span></div>
+      </div>
+      <button class="primary-button" id="installButton" type="button">홈 화면에 앱 설치</button>
+      <ol class="ios-steps" id="iosSteps" hidden>
+        <li>Safari 아래쪽의 <b>공유</b> 버튼을 누르세요.</li>
+        <li><b>홈 화면에 추가</b>를 선택하세요.</li>
+        <li>오른쪽 위의 <b>추가</b>를 누르면 완료됩니다.</li>
+      </ol>
+      <div class="install-benefits">
+        <span><b>전체화면</b>브라우저 메뉴 없이 실행</span>
+        <span><b>오프라인</b>연결이 끊겨도 기록 확인</span>
+        <span><b>자동저장</b>이 기기에 안전하게 보관</span>
+      </div>
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

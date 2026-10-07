@@ -1,9 +1,11 @@
 const DAILY_RATE_KEY = "maeil-rate";
 const RECORDS_KEY = "maeil-records";
-const today = new Date(2026, 9, 7);
+const today = new Date();
+today.setHours(0, 0, 0, 0);
 let viewDate = new Date(today.getFullYear(), today.getMonth(), 1);
 let dailyRate = Number(localStorage.getItem(DAILY_RATE_KEY)) || 200000;
 let hideMoney = false;
+let installPrompt = null;
 
 const seedRecords = [
   ["2026-10-01", 1, "반포 재건축 현장", "형틀 작업"],
@@ -179,11 +181,69 @@ $("#workForm").addEventListener("submit", saveRecord);
 $("#workClose").addEventListener("click", () => $("#workDialog").close());
 document.querySelectorAll('input[name="work"]').forEach((input) => input.addEventListener("change", updateDayPay));
 $("#panelClose").addEventListener("click", () => $("#panelDialog").close());
+$("#menuButton").addEventListener("click", openInstallDialog);
+$("#installClose").addEventListener("click", () => $("#installDialog").close());
+$("#installButton").addEventListener("click", installApp);
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
   button.classList.add("active");
   if (button.dataset.page !== "calendar") openPanel(button.dataset.page);
 }));
-document.querySelectorAll("[data-toast]").forEach((button) => button.addEventListener("click", () => showToast(button.dataset.toast)));
-
 renderCalendar();
+
+function isInstalled() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function openInstallDialog() {
+  const button = $("#installButton");
+  const status = $("#installStatus");
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  $("#iosSteps").hidden = !ios || isInstalled();
+
+  if (isInstalled()) {
+    button.textContent = "앱으로 설치됨";
+    button.disabled = true;
+    status.textContent = "현재 홈 화면 앱으로 실행 중입니다.";
+  } else if (installPrompt) {
+    button.textContent = "홈 화면에 앱 설치";
+    button.disabled = false;
+    status.textContent = "한 번 설치하면 일반 앱처럼 바로 열 수 있어요.";
+  } else if (ios) {
+    button.textContent = "아래 순서대로 설치하세요";
+    button.disabled = true;
+    status.textContent = "Safari의 홈 화면 추가 기능으로 설치할 수 있어요.";
+  } else {
+    button.textContent = "브라우저 메뉴에서 앱 설치";
+    button.disabled = true;
+    status.textContent = "브라우저 메뉴의 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택하세요.";
+  }
+  $("#installDialog").showModal();
+}
+
+async function installApp() {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  const choice = await installPrompt.userChoice;
+  installPrompt = null;
+  $("#installDialog").close();
+  showToast(choice.outcome === "accepted" ? "홈 화면에 앱을 설치했습니다" : "설치를 취소했습니다");
+}
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  installPrompt = event;
+});
+
+window.addEventListener("appinstalled", () => {
+  installPrompt = null;
+  showToast("매일공수대장 설치가 완료됐습니다");
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
+}
+
+if (new URLSearchParams(location.search).get("action") === "add") {
+  openWorkDialog(today, records.find((item) => item.date === dateKey(today)));
+}
