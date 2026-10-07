@@ -276,3 +276,9 @@ select:focus, input[type="text"]:focus { border-color: var(--green-700); box-sha
 .topbar { grid-template-columns: 1fr auto 1fr; }
 .topbar .menu-btn { justify-self: start; }
 .topbar-actions { justify-self: end; }
+
+/* exit confirm */
+.exit-body { text-align: center; margin: 4px 0 22px; }
+.exit-body img { display: block; margin: 0 auto 14px; border-radius: 16px; }
+.exit-body h2 { margin: 0; font-size: 1.15rem; letter-spacing: -.04em; }
+.exit-body p { margin: 8px 0 0; color: var(--muted); font-size: .8rem; }

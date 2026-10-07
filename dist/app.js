@@ -352,6 +352,9 @@ $("#pinForm").addEventListener("submit", submitPin);
 $("#pinCancel").addEventListener("click", () => finishPasscode(false));
 $("#pinClose").addEventListener("click", () => finishPasscode(false));
 $("#pinDialog").addEventListener("cancel", (event) => { event.preventDefault(); finishPasscode(false); });
+$("#panelDialog").addEventListener("close", resetNav);
+$("#exitCancel").addEventListener("click", () => $("#exitDialog").close());
+$("#exitConfirm").addEventListener("click", exitApp);
 $("#installClose").addEventListener("click", () => $("#installDialog").close());
 $("#installButton").addEventListener("click", installApp);
 $("#authForm").addEventListener("submit", submitPasscode);
@@ -457,6 +460,69 @@ function handleShortcut() {
     openWorkDialog(today, records.find((item) => item.date === dateKey(today)));
   }
 }
+
+// ── 휴대폰 뒤로가기 ──
+// 뒤로가기를 누르면 열린 창 → 펼친 목록 → 다른 달 → 스크롤 순서로 하나씩 닫으며 홈 화면으로 돌아오고,
+// 홈 화면에서 누르면 바로 닫지 않고 "종료할까요?" 팝업을 띄웁니다.
+function resetNav() {
+  document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === "calendar"));
+}
+
+let guardActive = false;
+function pushBackGuard() {
+  history.pushState({ gongsuGuard: Date.now() }, "");
+  guardActive = true;
+}
+
+function stepBack() {
+  if ($("#pinDialog").open) { finishPasscode(false); return true; }
+  if ($("#exitDialog").open) { $("#exitDialog").close(); return true; }
+  for (const id of ["#workDialog", "#installDialog", "#panelDialog", "#menuDialog"]) {
+    if ($(id).open) { $(id).close(); return true; }
+  }
+  if (document.body.classList.contains("locked")) return false;
+  const viewAll = $("#viewAllButton");
+  if (viewAll.dataset.expanded === "true") {
+    viewAll.dataset.expanded = "false";
+    viewAll.textContent = "전체 보기";
+    renderRecent(false);
+    return true;
+  }
+  if (viewDate.getFullYear() !== today.getFullYear() || viewDate.getMonth() !== today.getMonth()) {
+    viewDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    renderCalendar();
+    showToast("이번 달로 돌아왔어요");
+    return true;
+  }
+  if (window.scrollY > 40) { window.scrollTo({ top: 0, behavior: "smooth" }); return true; }
+  return false;
+}
+
+window.addEventListener("popstate", () => {
+  guardActive = false;
+  if (exiting) return;
+  pushBackGuard();
+  if (!stepBack()) $("#exitDialog").showModal();
+});
+
+let exiting = false;
+function exitApp() {
+  $("#exitDialog").close();
+  exiting = true;
+  if (isKakaoInApp()) { location.href = "kakaotalk://inappbrowser/close"; }
+  else { window.close(); }
+  // 브라우저가 스크립트로 창 닫기를 막는 경우: 가드를 빼서 다음 뒤로가기에 바로 나가지도록 함
+  setTimeout(() => {
+    if (document.visibilityState === "hidden") return;
+    history.back();
+    setTimeout(() => { exiting = false; showToast("뒤로가기를 한 번 더 누르면 종료돼요"); }, 150);
+  }, 400);
+}
+
+// 새로고침해도 기록이 쌓이지 않게, 이미 가드 위에 있으면 다시 넣지 않음
+if (history.state && history.state.gongsuGuard) guardActive = true; else pushBackGuard();
+// "한 번 더 누르면 종료" 상태에서 다시 앱을 쓰기 시작하면 가드를 복구
+document.addEventListener("pointerdown", () => { if (!guardActive && !exiting) pushBackGuard(); }, true);
 
 if (sessionStorage.getItem(AUTH_SESSION_KEY) === "unlocked") {
   unlockApp();

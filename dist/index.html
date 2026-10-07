@@ -16,7 +16,7 @@
     <link rel="manifest" href="./manifest.webmanifest?v=4" />
     <link rel="icon" type="image/svg+xml" href="./icons/app-icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./styles.css?v=4" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
   </head>
   <body class="locked">
     <section class="auth-screen" id="authScreen" aria-labelledby="authTitle">
@@ -223,7 +223,20 @@
       </form>
     </dialog>
 
+    <dialog class="panel-dialog pin-dialog exit-dialog" id="exitDialog">
+      <div class="dialog-handle"></div>
+      <div class="exit-body">
+        <img src="./icons/app-icon.svg" alt="" width="56" height="56" />
+        <h2>매일공수대장을 종료할까요?</h2>
+        <p>입력한 기록은 이 휴대폰에 그대로 저장돼 있어요.</p>
+      </div>
+      <div class="dialog-actions">
+        <button class="ghost-button" id="exitCancel" type="button">취소</button>
+        <button class="primary-button" id="exitConfirm" type="button">종료</button>
+      </div>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=4"></script>
+    <script src="./app.js?v=5"></script>
   </body>
 </html>
