@@ -1,6 +1,9 @@
-name: Deploy Maeil Gongsu to GitHub Pages (manual)
+name: Deploy Maeil Gongsu to GitHub Pages
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:

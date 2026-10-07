@@ -10,7 +10,7 @@
 
 ## 초기 접속
 
-- 초기 비밀번호: `3011`
+- 초기 비밀번호는 관리자에게 별도로 전달받습니다.
 - 브라우저를 완전히 닫았다가 다시 열면 비밀번호를 다시 확인합니다.
 - 이 잠금은 신뢰하는 소규모 그룹을 위한 기본 보호입니다. 정적 웹앱 자체에는 실제 사용자 인증 서버가 없으므로 민감한 개인정보나 금융정보를 저장하지 마세요.
 
@@ -26,6 +26,4 @@ npx serve dist
 
 ## GitHub Pages
 
-`.github/workflows/pages.yml`은 `dist` 폴더를 GitHub Pages에 배포하는 수동 워크플로입니다. 현재 계정에서 비공개 저장소 Pages를 지원하는 요금제를 사용하고 Pages를 활성화한 뒤 실행할 수 있습니다.
-
-저장소 생성과 공동 작업 설정은 [GitHub 설정 가이드](docs/GITHUB_SETUP.md)를 참고하세요.
+`main` 브랜치에 변경사항을 올리면 `.github/workflows/pages.yml`이 `dist` 폴더를 GitHub Pages에 자동 배포합니다.
