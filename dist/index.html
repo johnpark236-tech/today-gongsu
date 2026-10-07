@@ -16,7 +16,7 @@
     <link rel="manifest" href="./manifest.webmanifest?v=4" />
     <link rel="icon" type="image/svg+xml" href="./icons/app-icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./styles.css?v=6" />
+    <link rel="stylesheet" href="./styles.css?v=7" />
   </head>
   <body class="locked">
     <section class="auth-screen" id="authScreen" aria-labelledby="authTitle">
@@ -57,22 +57,29 @@
           <div class="summary-top">
             <div>
               <p class="eyebrow" id="summaryLabel">이번 달 예상 급여</p>
-              <h1 id="summary-title"><span id="salaryTotal">3,625,000</span><small>원</small></h1>
+              <h1 id="summary-title"><span id="salaryTotal">0</span><small>원</small></h1>
             </div>
             <button class="privacy-button" id="privacyButton" type="button" aria-label="금액 숨기기">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
             </button>
           </div>
           <div class="summary-grid">
-            <div><strong id="daysTotal">14일</strong><span>근무일</span></div>
-            <div><strong id="workTotal">18.5</strong><span>총 공수</span></div>
-            <div><strong id="siteTotal">3곳</strong><span>현장</span></div>
+            <div><strong id="daysTotal">0일</strong><span>근무일</span></div>
+            <div><strong id="workTotal">0.0</strong><span>총 공수</span></div>
+            <div><strong id="siteTotal">0곳</strong><span>현장</span></div>
           </div>
         </section>
 
         <div class="worker-tabs" id="workerTabs" role="tablist" aria-label="근무자 선택"></div>
 
         <section class="calendar-card" aria-label="월간 공수 달력">
+          <div class="bulk-banner" id="bulkBanner">
+            <div><strong>일괄 수정</strong><span id="bulkCount">날짜를 눌러 선택하세요</span></div>
+            <div class="bulk-banner-actions">
+              <button type="button" id="bulkSelectRecorded">기록 있는 날</button>
+              <button type="button" id="bulkClear">선택 해제</button>
+            </div>
+          </div>
           <div class="month-controls">
             <button class="month-arrow" id="prevMonth" type="button" aria-label="이전 달">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -87,6 +94,10 @@
           </div>
           <div class="calendar" id="calendar"></div>
           <p class="legend-note">달력의 숫자는 그날 예상 금액(원)이에요. 색은 공수를 뜻해요.</p>
+          <button class="bulk-button" id="bulkButton" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="m15 17.5 2 2 4-4"/></svg>
+            일괄 수정 <small>여러 날짜 한 번에 입력·수정·삭제</small>
+          </button>
           <div class="legend" aria-label="공수 색상 안내">
             <span><i class="dot half"></i>0.5</span>
             <span><i class="dot one"></i>1.0</span>
@@ -104,6 +115,12 @@
           <div class="record-list" id="recordList"></div>
         </section>
       </main>
+
+      <div class="bulk-bar" id="bulkBar" role="toolbar" aria-label="일괄 수정">
+        <button class="ghost-button" id="bulkCancel" type="button">취소</button>
+        <button class="danger-button" id="bulkDelete" type="button">삭제</button>
+        <button class="primary-button" id="bulkEdit" type="button">선택한 날 수정</button>
+      </div>
 
       <nav class="bottom-nav" aria-label="주요 메뉴">
         <button class="nav-item active" type="button" data-page="calendar">
@@ -227,6 +244,34 @@
       </form>
     </dialog>
 
+    <dialog class="work-dialog bulk-dialog" id="bulkDialog">
+      <form id="bulkForm">
+        <div class="dialog-handle"></div>
+        <div class="dialog-heading">
+          <div><p class="eyebrow">일괄 수정 · <span id="bulkDialogCount">0일</span></p><h2>선택한 날 한 번에 저장</h2></div>
+          <button class="close-button" id="bulkClose" type="button" aria-label="닫기">×</button>
+        </div>
+        <p class="bulk-dates" id="bulkDates"></p>
+        <label class="field-label" for="bulkWorkerInput">근무자</label>
+        <select id="bulkWorkerInput"></select>
+        <fieldset>
+          <legend>공수</legend>
+          <div class="work-options">
+            <label><input type="radio" name="bulkWork" value="0.5" /><span>0.5</span></label>
+            <label><input type="radio" name="bulkWork" value="1" checked /><span>1.0</span></label>
+            <label><input type="radio" name="bulkWork" value="1.5" /><span>1.5</span></label>
+            <label><input type="radio" name="bulkWork" value="2" /><span>2.0</span></label>
+          </div>
+        </fieldset>
+        <label class="field-label" for="bulkSiteInput">현장</label>
+        <select id="bulkSiteInput"></select>
+        <label class="field-label" for="bulkMemoInput">메모 <small>(비우면 기존 메모 유지)</small></label>
+        <input id="bulkMemoInput" type="text" placeholder="작업 내용이나 특이사항" maxlength="60" />
+        <p class="bulk-preview" id="bulkPreview"></p>
+        <button class="primary-button" type="submit">일괄 저장</button>
+      </form>
+    </dialog>
+
     <dialog class="panel-dialog pin-dialog item-dialog" id="itemDialog">
       <form id="itemForm">
         <div class="dialog-handle"></div>
@@ -260,6 +305,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=6"></script>
+    <script src="./app.js?v=7"></script>
   </body>
 </html>

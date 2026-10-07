@@ -11,6 +11,8 @@ let viewDate = new Date(today.getFullYear(), today.getMonth(), 1);
 // 새 근무자를 추가할 때 기본으로 들어가는 1공수 단가
 let dailyRate = Number(localStorage.getItem(DAILY_RATE_KEY)) || 200000;
 let hideMoney = false;
+// 일괄 수정 모드 상태 (선택한 날짜들)
+const bulk = { active: false, dates: new Set() };
 let installPrompt = null;
 // 카카오 디벨로퍼스에서 발급받은 JavaScript 키를 넣으면 카카오톡 공유창이 바로 열립니다.
 // 비워두면 휴대폰 기본 공유창(카카오톡 포함)이 열립니다.
@@ -28,33 +30,32 @@ let workers = loadJson(WORKERS_KEY, null);
 if (!Array.isArray(workers) || !workers.length) workers = [{ id: "w1", name: "근무자 1", rate: dailyRate }];
 
 let sites = loadJson(SITES_KEY, null);
-if (!Array.isArray(sites) || !sites.length) {
-  sites = [
-    { name: "반포 재건축 현장", area: "서울 서초구" },
-    { name: "성수 오피스 현장", area: "서울 성동구" },
-    { name: "마곡 물류센터", area: "서울 강서구" }
-  ];
-}
+if (!Array.isArray(sites)) sites = [];
 
-const seedRecords = [
-  ["2026-10-01", 1, "반포 재건축 현장", "형틀 작업"],
-  ["2026-10-02", 1.5, "반포 재건축 현장", "연장 근무"],
-  ["2026-10-05", 1, "성수 오피스 현장", "배관 보조"],
-  ["2026-10-06", 2, "마곡 물류센터", "야간 작업"],
-  ["2026-10-07", 1, "반포 재건축 현장", "철근 작업"],
-  ["2026-10-08", 1, "반포 재건축 현장", ""],
-  ["2026-10-09", .5, "성수 오피스 현장", "오전 작업"],
-  ["2026-10-12", 1.5, "마곡 물류센터", "연장 근무"],
-  ["2026-10-13", 1, "반포 재건축 현장", ""],
-  ["2026-10-14", 1, "반포 재건축 현장", ""],
-  ["2026-10-15", 1.5, "성수 오피스 현장", "연장 근무"],
-  ["2026-10-16", 1, "마곡 물류센터", ""],
-  ["2026-10-19", 2, "반포 재건축 현장", "야간 작업"],
-  ["2026-10-20", 1.5, "성수 오피스 현장", "연장 근무"]
-].map(([date, work, site, memo]) => ({ date, work, site, memo }));
+// 예전 버전에 미리 들어 있던 예시 기록 (휴대폰에 저장돼 있으면 한 번 지움)
+const SAMPLE_RECORDS = [
+  ["2026-10-01", 1, "반포 재건축 현장", "형틀 작업"], ["2026-10-02", 1.5, "반포 재건축 현장", "연장 근무"],
+  ["2026-10-05", 1, "성수 오피스 현장", "배관 보조"], ["2026-10-06", 2, "마곡 물류센터", "야간 작업"],
+  ["2026-10-07", 1, "반포 재건축 현장", "철근 작업"], ["2026-10-08", 1, "반포 재건축 현장", ""],
+  ["2026-10-09", .5, "성수 오피스 현장", "오전 작업"], ["2026-10-12", 1.5, "마곡 물류센터", "연장 근무"],
+  ["2026-10-13", 1, "반포 재건축 현장", ""], ["2026-10-14", 1, "반포 재건축 현장", ""],
+  ["2026-10-15", 1.5, "성수 오피스 현장", "연장 근무"], ["2026-10-16", 1, "마곡 물류센터", ""],
+  ["2026-10-19", 2, "반포 재건축 현장", "야간 작업"], ["2026-10-20", 1.5, "성수 오피스 현장", "연장 근무"]
+];
+const SAMPLE_SITES = [["반포 재건축 현장", "서울 서초구"], ["성수 오피스 현장", "서울 성동구"], ["마곡 물류센터", "서울 강서구"]];
+const SAMPLE_PURGE_KEY = "maeil-sample-purged";
 
 let records = loadJson(RECORDS_KEY, null);
-if (!Array.isArray(records)) records = seedRecords;
+if (!Array.isArray(records)) records = [];
+if (!localStorage.getItem(SAMPLE_PURGE_KEY)) {
+  const isSample = (r) => SAMPLE_RECORDS.some(([date, work, site, memo]) => r.date === date && Number(r.work) === work && r.site === site && (r.memo || "") === memo);
+  records = records.filter((r) => !isSample(r));
+  // 예시 현장은 기록에 쓰이지 않고 손대지 않은 경우에만 지움
+  sites = sites.filter((s) => !SAMPLE_SITES.some(([name, area]) => s.name === name && s.area === area) || records.some((r) => r.site === s.name));
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+  localStorage.setItem(SITES_KEY, JSON.stringify(sites));
+  localStorage.setItem(SAMPLE_PURGE_KEY, "1");
+}
 // 예전 기록(근무자 정보 없음)은 첫 번째 근무자 기록으로 옮김
 records.forEach((item) => { if (!item.worker || !workers.some((w) => w.id === item.worker)) item.worker = workers[0].id; item.work = Number(item.work); });
 
@@ -146,7 +147,7 @@ function renderCalendar() {
     const pay = dayRecords.reduce((sum, item) => sum + payOf(item), 0);
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `calendar-day${date.getMonth() !== month ? " outside" : ""}${date.getDay() === 0 ? " sunday" : ""}${date.getDay() === 6 ? " saturday" : ""}${key === dateKey(today) ? " today" : ""}`;
+    button.className = `calendar-day${bulk.dates.has(key) ? " selected" : ""}${date.getMonth() !== month ? " outside" : ""}${date.getDay() === 0 ? " sunday" : ""}${date.getDay() === 6 ? " saturday" : ""}${key === dateKey(today) ? " today" : ""}`;
     button.setAttribute("aria-label", `${koreanDate(date)}${dayRecords.length ? `, ${work} 공수, ${formatWon(pay)}` : ", 기록 없음"}`);
     let badge = "";
     if (dayRecords.length) {
@@ -155,11 +156,12 @@ function renderCalendar() {
       badge = `<span class="work-badge ${level}">${label}</span>${dayRecords.length > 1 ? `<span class="people-count">${dayRecords.length}명</span>` : ""}`;
     }
     button.innerHTML = `<span class="day-number">${date.getDate()}</span>${badge}`;
-    button.addEventListener("click", () => openWorkDialog(date, dayRecords[0]?.worker));
+    button.addEventListener("click", () => (bulk.active ? toggleBulkDate(key) : openWorkDialog(date, dayRecords[0]?.worker)));
     calendar.appendChild(button);
   }
   $("#legendMulti").hidden = currentWorker !== "all" || workers.length < 2;
   renderWorkerTabs();
+  renderBulkBar();
   renderSummary();
   renderRecent($("#viewAllButton").dataset.expanded === "true");
 }
@@ -206,8 +208,11 @@ function renderRecent(showAll = false) {
 function fillSelect(select, list, selected) {
   const names = list.map((item) => item.name);
   if (selected && !names.includes(selected)) names.push(selected);
-  select.innerHTML = names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
-  if (selected) select.value = selected;
+  select.innerHTML = (names.length ? "" : `<option value="" disabled>현장을 추가해 주세요</option>`)
+    + names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")
+    + `<option value="__new__">+ 새 현장 추가</option>`;
+  select.value = selected && names.includes(selected) ? selected : (names[0] ?? "");
+  select.dataset.prev = select.value;
 }
 
 function openWorkDialog(date, workerId) {
@@ -258,8 +263,6 @@ async function saveRecord(event) {
   };
   const index = records.findIndex((item) => item.date === date && item.worker === worker);
   if (index >= 0) {
-    const ok = await askPasscode({ title: "기록 수정", message: `${workerName(worker)}님 ${koreanDate(new Date(`${date}T00:00:00`))} 기록을 수정하려면 비밀번호를 입력해 주세요.`, confirm: "수정" });
-    if (!ok) return;
     records[index] = next;
   } else {
     records.push(next);
@@ -272,7 +275,7 @@ async function saveRecord(event) {
 
 async function deleteRecord(date, worker) {
   const label = koreanDate(new Date(`${date}T00:00:00`));
-  const ok = await askPasscode({ title: "기록 삭제", message: `${workerName(worker)}님 ${label} 기록을 삭제할까요? 삭제한 기록은 되돌릴 수 없어요. 비밀번호를 입력해 주세요.`, confirm: "삭제", danger: true });
+  const ok = await askPasscode({ title: "기록 삭제", message: `${workerName(worker)}님 ${label} 기록을 삭제할까요? 삭제한 기록은 되돌릴 수 없어요.`, confirm: "삭제", danger: true, requirePin: false });
   if (!ok) return;
   records = records.filter((item) => !(item.date === date && item.worker === worker));
   saveRecords();
@@ -283,8 +286,13 @@ async function deleteRecord(date, worker) {
 
 // 수정·삭제 전에 비밀번호를 확인하는 팝업. 맞으면 true, 취소하면 false.
 let pinResolve = null;
-function askPasscode({ title, message, confirm = "확인", danger = false }) {
+// requirePin: false 이면 비밀번호 없이 확인만 받음
+let pinRequired = true;
+function askPasscode({ title, message, confirm = "확인", danger = false, requirePin = true }) {
   if (pinResolve) pinResolve(false);
+  pinRequired = requirePin;
+  $("#pinEyebrow").textContent = requirePin ? "비밀번호 확인" : "확인";
+  $("#pinInput").hidden = !requirePin;
   $("#pinTitle").textContent = title;
   $("#pinMessage").textContent = message;
   $("#pinSubmit").textContent = confirm;
@@ -292,7 +300,7 @@ function askPasscode({ title, message, confirm = "확인", danger = false }) {
   $("#pinError").textContent = "";
   $("#pinInput").value = "";
   $("#pinDialog").showModal();
-  setTimeout(() => $("#pinInput").focus(), 50);
+  if (requirePin) setTimeout(() => $("#pinInput").focus(), 50);
   return new Promise((resolve) => { pinResolve = resolve; });
 }
 
@@ -306,7 +314,7 @@ function finishPasscode(result) {
 async function submitPin(event) {
   event.preventDefault();
   const input = $("#pinInput");
-  if (await hashText(input.value) === ACCESS_HASH) { finishPasscode(true); return; }
+  if (!pinRequired || await hashText(input.value) === ACCESS_HASH) { finishPasscode(true); return; }
   $("#pinError").textContent = "비밀번호가 맞지 않습니다.";
   input.value = "";
   input.focus();
@@ -367,6 +375,7 @@ function saveItem(event) {
   $("#itemDialog").close();
   renderCalendar();
   refreshOpenPanel();
+  refreshSiteSelects(isWorker ? null : name);
   showToast(`${name} ${index >= 0 ? "수정" : "추가"} 완료`);
 }
 
@@ -685,10 +694,11 @@ function pushBackGuard() {
 function stepBack() {
   if ($("#pinDialog").open) { finishPasscode(false); return true; }
   if ($("#exitDialog").open) { $("#exitDialog").close(); return true; }
-  for (const id of ["#itemDialog", "#workDialog", "#installDialog", "#panelDialog", "#menuDialog"]) {
+  for (const id of ["#itemDialog", "#bulkDialog", "#workDialog", "#installDialog", "#panelDialog", "#menuDialog"]) {
     if ($(id).open) { $(id).close(); return true; }
   }
   if (document.body.classList.contains("locked")) return false;
+  if (bulk.active) { exitBulkMode(); return true; }
   const viewAll = $("#viewAllButton");
   if (viewAll.dataset.expanded === "true") {
     viewAll.dataset.expanded = "false";
@@ -735,3 +745,133 @@ document.addEventListener("pointerdown", () => { if (!guardActive && !exiting) p
 if (sessionStorage.getItem(AUTH_SESSION_KEY) === "unlocked") {
   unlockApp();
 }
+
+// ── 새 현장 추가 (입력창의 현장 선택에서) ──
+function refreshSiteSelects(selectName) {
+  for (const id of ["#siteInput", "#bulkSiteInput"]) {
+    const select = $(id);
+    const dialog = select.closest("dialog");
+    if (!dialog.open) continue;
+    const keep = select.value === "__new__" ? select.dataset.prev : select.value;
+    fillSelect(select, sites, selectName && select.dataset.wantsNew === "1" ? selectName : keep);
+    select.dataset.wantsNew = "";
+  }
+}
+for (const id of ["#siteInput", "#bulkSiteInput"]) {
+  $(id).addEventListener("change", (event) => {
+    const select = event.target;
+    if (select.value === "__new__") {
+      select.dataset.wantsNew = "1";
+      select.value = select.dataset.prev || "";
+      openItemDialog("site");
+    } else {
+      select.dataset.prev = select.value;
+    }
+  });
+}
+
+// ── 일괄 수정 ──
+// 달력에서 여러 날짜를 골라 같은 공수·현장으로 한꺼번에 입력/수정하거나 삭제합니다.
+
+function enterBulkMode() {
+  bulk.active = true;
+  bulk.dates.clear();
+  document.body.classList.add("bulk-mode");
+  renderCalendar();
+  $(".calendar-card").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function exitBulkMode() {
+  bulk.active = false;
+  bulk.dates.clear();
+  document.body.classList.remove("bulk-mode");
+  renderCalendar();
+}
+
+function toggleBulkDate(key) {
+  if (bulk.dates.has(key)) bulk.dates.delete(key); else bulk.dates.add(key);
+  renderCalendar();
+}
+
+function selectRecordedDays() {
+  const prefix = monthPrefix();
+  getMonthRecords().forEach((r) => { if (r.date.startsWith(prefix)) bulk.dates.add(r.date); });
+  renderCalendar();
+}
+
+function renderBulkBar() {
+  const n = bulk.dates.size;
+  $("#bulkCount").textContent = n ? `${n}일 선택됨` : "날짜를 눌러 선택하세요";
+  $("#bulkEdit").disabled = !n;
+  $("#bulkDelete").disabled = !n || !records.some((r) => bulk.dates.has(r.date) && (currentWorker === "all" || r.worker === currentWorker));
+}
+
+function openBulkDialog() {
+  const dates = [...bulk.dates].sort();
+  const worker = currentWorker !== "all" ? currentWorker : workers[0].id;
+  $("#bulkWorkerInput").innerHTML = workers.map((w) => `<option value="${w.id}">${escapeHtml(w.name)}</option>`).join("");
+  $("#bulkWorkerInput").value = worker;
+  $("#bulkDates").textContent = dates.map((d) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`).join(", ");
+  $("#bulkDialogCount").textContent = `${dates.length}일`;
+  fillSelect($("#bulkSiteInput"), sites, sites[0]?.name);
+  $("#bulkMemoInput").value = "";
+  document.querySelectorAll('input[name="bulkWork"]').forEach((input) => { input.checked = input.value === "1"; });
+  updateBulkPreview();
+  $("#bulkDialog").showModal();
+}
+
+function updateBulkPreview() {
+  const worker = $("#bulkWorkerInput").value;
+  const work = Number(document.querySelector('input[name="bulkWork"]:checked').value);
+  const dates = [...bulk.dates];
+  const existing = dates.filter((d) => findRecord(d, worker)).length;
+  const rate = workerById(worker)?.rate ?? dailyRate;
+  $("#bulkPreview").textContent = `새로 입력 ${dates.length - existing}일 · 덮어쓰기 ${existing}일 · 합계 ${formatWon(dates.length * work * rate)}`;
+}
+
+async function applyBulk(event) {
+  event.preventDefault();
+  const worker = $("#bulkWorkerInput").value;
+  const site = $("#bulkSiteInput").value;
+  if (!site || site === "__new__") { showToast("작업 현장을 선택해 주세요"); return; }
+  const work = Number(document.querySelector('input[name="bulkWork"]:checked').value);
+  const memo = $("#bulkMemoInput").value.trim();
+  const dates = [...bulk.dates].sort();
+  const ok = await askPasscode({ title: "일괄 수정", message: `${workerName(worker)}님 ${dates.length}일을 ${work.toFixed(1)}공수 · ${site}(으)로 저장할까요? 비밀번호를 입력해 주세요.`, confirm: "일괄 저장" });
+  if (!ok) return;
+  dates.forEach((date) => {
+    const index = records.findIndex((r) => r.date === date && r.worker === worker);
+    const prevMemo = index >= 0 ? records[index].memo : "";
+    const next = { date, worker, work, site, memo: memo || prevMemo || "" };
+    if (index >= 0) records[index] = next; else records.push(next);
+  });
+  saveRecords();
+  $("#bulkDialog").close();
+  exitBulkMode();
+  showToast(`${dates.length}일 일괄 저장했습니다`);
+}
+
+async function bulkDelete() {
+  const targets = records.filter((r) => bulk.dates.has(r.date) && (currentWorker === "all" || r.worker === currentWorker));
+  if (!targets.length) return;
+  const who = currentWorker === "all" ? "모든 근무자" : `${workerName(currentWorker)}님`;
+  const ok = await askPasscode({ title: "일괄 삭제", message: `선택한 ${bulk.dates.size}일의 ${who} 기록 ${targets.length}건을 삭제할까요? 되돌릴 수 없어요. 비밀번호를 입력해 주세요.`, confirm: "삭제", danger: true });
+  if (!ok) return;
+  records = records.filter((r) => !targets.includes(r));
+  saveRecords();
+  exitBulkMode();
+  showToast(`${targets.length}건 삭제했습니다`);
+}
+
+$("#bulkButton").addEventListener("click", enterBulkMode);
+$("#bulkCancel").addEventListener("click", exitBulkMode);
+$("#bulkSelectRecorded").addEventListener("click", selectRecordedDays);
+$("#bulkClear").addEventListener("click", () => { bulk.dates.clear(); renderCalendar(); });
+$("#bulkEdit").addEventListener("click", openBulkDialog);
+$("#bulkDelete").addEventListener("click", bulkDelete);
+$("#bulkForm").addEventListener("submit", applyBulk);
+$("#bulkClose").addEventListener("click", () => $("#bulkDialog").close());
+$("#bulkWorkerInput").addEventListener("change", updateBulkPreview);
+document.querySelectorAll('input[name="bulkWork"]').forEach((input) => input.addEventListener("change", updateBulkPreview));
+renderBulkBar();
+$("#itemDialog").addEventListener("close", () => { document.querySelectorAll("#siteInput, #bulkSiteInput").forEach((el) => { el.dataset.wantsNew = ""; }); });

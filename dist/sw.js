@@ -1,9 +1,9 @@
-const CACHE_NAME = "maeil-gongsu-v6";
+const CACHE_NAME = "maeil-gongsu-v7";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=6",
-  "./app.js?v=6",
+  "./styles.css?v=7",
+  "./app.js?v=7",
   "./manifest.webmanifest?v=4",
   "./icons/app-icon.svg",
   "./icons/app-icon-192.png",
