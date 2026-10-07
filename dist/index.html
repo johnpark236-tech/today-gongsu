@@ -13,12 +13,27 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="manifest" href="./manifest.webmanifest?v=2" />
     <link rel="icon" type="image/svg+xml" href="./icons/app-icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=2" />
   </head>
-  <body>
+  <body class="locked">
+    <section class="auth-screen" id="authScreen" aria-labelledby="authTitle">
+      <div class="auth-card">
+        <img class="auth-icon" src="./icons/app-icon.svg" alt="" width="84" height="84" />
+        <p class="auth-kicker">우리 현장의 공수 기록</p>
+        <h1 id="authTitle"><span>오늘</span>공수</h1>
+        <p class="auth-copy">공유받은 비밀번호를 입력해 주세요.</p>
+        <form id="authForm">
+          <label class="sr-only" for="passcodeInput">접속 비밀번호</label>
+          <input id="passcodeInput" class="passcode-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" autocomplete="off" autofocus />
+          <p class="auth-error" id="authError" role="alert" aria-live="polite"></p>
+          <button class="primary-button auth-button" type="submit">대장 열기</button>
+        </form>
+        <p class="auth-note">비밀번호는 관리자에게 문의하세요.</p>
+      </div>
+    </section>
     <div class="app-shell">
       <header class="topbar">
         <button class="icon-btn menu-btn" id="menuButton" type="button" aria-label="앱 메뉴 열기">
@@ -161,6 +176,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js"></script>
+    <script src="./app.js?v=2"></script>
   </body>
 </html>

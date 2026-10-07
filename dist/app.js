@@ -1,5 +1,7 @@
 const DAILY_RATE_KEY = "maeil-rate";
 const RECORDS_KEY = "maeil-records";
+const ACCESS_HASH = "41c8fa7d060badc5618a28326dc00cf07e1ce22a79a94a1fed94f271d3127447";
+const AUTH_SESSION_KEY = "today-gongsu-auth";
 const today = new Date();
 today.setHours(0, 0, 0, 0);
 let viewDate = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -33,6 +35,36 @@ const $ = (selector) => document.querySelector(selector);
 const formatWon = (value) => `${Math.round(value).toLocaleString("ko-KR")}원`;
 const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const koreanDate = (date) => new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "long" }).format(date);
+
+async function hashText(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function unlockApp() {
+  sessionStorage.setItem(AUTH_SESSION_KEY, "unlocked");
+  document.body.classList.remove("locked");
+  $("#authScreen").classList.add("hidden");
+  handleShortcut();
+}
+
+async function submitPasscode(event) {
+  event.preventDefault();
+  const input = $("#passcodeInput");
+  const error = $("#authError");
+  if (await hashText(input.value) === ACCESS_HASH) {
+    error.textContent = "";
+    unlockApp();
+    return;
+  }
+  error.textContent = "비밀번호가 맞지 않습니다.";
+  input.value = "";
+  input.focus();
+  const card = document.querySelector(".auth-card");
+  card.classList.remove("shake");
+  requestAnimationFrame(() => card.classList.add("shake"));
+}
 
 function getMonthRecords() {
   const prefix = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, "0")}`;
@@ -184,6 +216,7 @@ $("#panelClose").addEventListener("click", () => $("#panelDialog").close());
 $("#menuButton").addEventListener("click", openInstallDialog);
 $("#installClose").addEventListener("click", () => $("#installDialog").close());
 $("#installButton").addEventListener("click", installApp);
+$("#authForm").addEventListener("submit", submitPasscode);
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
   button.classList.add("active");
@@ -244,6 +277,12 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
 }
 
-if (new URLSearchParams(location.search).get("action") === "add") {
-  openWorkDialog(today, records.find((item) => item.date === dateKey(today)));
+function handleShortcut() {
+  if (new URLSearchParams(location.search).get("action") === "add" && !$("#workDialog").open) {
+    openWorkDialog(today, records.find((item) => item.date === dateKey(today)));
+  }
+}
+
+if (sessionStorage.getItem(AUTH_SESSION_KEY) === "unlocked") {
+  unlockApp();
 }

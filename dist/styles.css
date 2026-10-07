@@ -33,6 +33,36 @@ body {
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 svg { width: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+body.locked { overflow: hidden; }
+
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 80% 12%, rgba(251,191,36,.19), transparent 17rem),
+    linear-gradient(145deg, var(--green-800), var(--green-950));
+  transition: opacity .25s ease, visibility .25s ease;
+}
+.auth-screen::before { content: ""; position: absolute; inset: 0; opacity: .08; background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 23px 23px; }
+.auth-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.auth-card { position: relative; width: min(100%, 370px); padding: 32px 26px 26px; border-radius: 28px; background: white; box-shadow: 0 25px 70px rgba(0,0,0,.3); text-align: center; }
+.auth-icon { display: block; margin: -74px auto 18px; border: 7px solid rgba(255,255,255,.95); border-radius: 25px; box-shadow: 0 12px 28px rgba(5,45,22,.25); }
+.auth-kicker { margin: 0 0 4px; color: var(--green-700); font-size: .72rem; font-weight: 800; letter-spacing: .08em; }
+.auth-card h1 { margin: 0; font-size: 2rem; letter-spacing: -.07em; }
+.auth-card h1 span { color: var(--green-700); }
+.auth-copy { margin: 8px 0 20px; color: var(--muted); font-size: .84rem; }
+.passcode-input { height: 58px !important; margin: 0 !important; border: 2px solid #d9e2db !important; border-radius: 15px !important; text-align: center; font-size: 1.65rem !important; font-weight: 800; letter-spacing: .45em; padding-left: calc(13px + .45em) !important; }
+.passcode-input:focus { border-color: var(--green-700) !important; box-shadow: 0 0 0 4px rgba(24,113,59,.12) !important; }
+.auth-error { min-height: 21px; margin: 8px 0 4px; color: var(--red); font-size: .74rem; font-weight: 700; }
+.auth-button { margin-top: 0; }
+.auth-note { margin: 16px 0 0; color: #929b94; font-size: .7rem; }
+.auth-card.shake { animation: auth-shake .3s ease; }
+@keyframes auth-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
 
 .app-shell {
   width: min(100%, 520px);
