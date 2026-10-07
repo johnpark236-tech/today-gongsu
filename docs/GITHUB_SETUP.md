@@ -69,6 +69,6 @@ git push -u origin feature/작업이름
 
 ## 5. GitHub Pages 배포
 
-사용 중인 요금제에서 Pages 배포가 가능하다면 저장소의 **Settings → Pages → Build and deployment → Source**를 `GitHub Actions`로 설정합니다. 이후 `main`에 푸시할 때 `.github/workflows/pages.yml`이 앱을 자동 배포합니다.
+사용 중인 요금제에서 Pages 배포가 가능하다면 저장소의 **Settings → Pages → Build and deployment → Source**를 `GitHub Actions`로 설정합니다. 그다음 **Actions → Deploy Maeil Gongsu to GitHub Pages (manual) → Run workflow**를 눌러 배포합니다.
 
 배포가 끝나면 **Settings → Pages → Visit site**에서 주소를 확인하고, 휴대폰 Chrome 또는 Safari로 열어 홈 화면에 설치합니다.

@@ -26,6 +26,6 @@ npx serve dist
 
 ## GitHub Pages
 
-`main` 브랜치를 GitHub 원격 저장소에 올리면 `.github/workflows/pages.yml`이 `dist` 폴더를 자동 배포합니다.
+`.github/workflows/pages.yml`은 `dist` 폴더를 GitHub Pages에 배포하는 수동 워크플로입니다. 현재 계정에서 비공개 저장소 Pages를 지원하는 요금제를 사용하고 Pages를 활성화한 뒤 실행할 수 있습니다.
 
 저장소 생성과 공동 작업 설정은 [GitHub 설정 가이드](docs/GITHUB_SETUP.md)를 참고하세요.
