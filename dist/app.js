@@ -90,6 +90,7 @@ function unlockApp() {
   document.body.classList.remove("locked");
   $("#authScreen").classList.add("hidden");
   handleShortcut();
+  if (pendingToast) { const msg = pendingToast; pendingToast = ""; setTimeout(() => showToast(msg, 3200), 300); }
 }
 
 async function submitPasscode(event) {
@@ -431,7 +432,7 @@ function loadKakao() {
   if (kakaoReady) return kakaoReady;
   kakaoReady = new Promise((resolve) => {
     const script = document.createElement("script");
-    script.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js";
+    script.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.8.3/kakao.min.js";
     script.crossOrigin = "anonymous";
     script.onload = () => {
       try { if (!window.Kakao.isInitialized()) window.Kakao.init(KAKAO_JS_KEY); resolve(true); }
@@ -512,6 +513,15 @@ function openPanel(page) {
       ${sites.map((s, index) => `<button type="button" class="panel-card panel-edit" data-site-index="${index}"><div><strong>${escapeHtml(s.name)}</strong><span>${escapeHtml(s.area) || "위치 미입력"}</span></div><b class="edit-chip">수정</b></button>`).join("")}
       <button type="button" class="add-row" id="settingsAddSite">+ 작업 현장 추가</button>
 
+      <h3 class="settings-heading">기록 보관</h3>
+      <div class="panel-card storage-card"><div><strong>${isKakaoInApp() ? "카카오톡 안에 저장 중 (지워질 수 있음)" : isInstalled() ? "홈 화면 앱에 저장 중" : "이 브라우저에 저장 중"}</strong><span>${records.length}건 · 마지막 백업 ${localStorage.getItem(BACKUP_AT_KEY) ? new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" }).format(new Date(localStorage.getItem(BACKUP_AT_KEY))) : "없음"}${storagePersisted ? " · 영구 저장 켜짐" : ""}</span></div></div>
+      <div class="storage-actions">
+        <button type="button" class="add-row" id="backupSave">백업 파일 만들기</button>
+        <button type="button" class="add-row" id="backupLoad">백업 불러오기</button>
+      </div>
+      ${isKakaoInApp() ? `<button type="button" class="primary-button" id="settingsMove">크롬(홈 화면 앱)으로 기록 옮기기</button>` : ""}
+      <p class="storage-note">다른 휴대폰으로 옮기거나 혹시 모를 초기화에 대비해 가끔 백업 파일을 만들어 카카오톡 '나와의 채팅'에 보관해 두세요.</p>
+
       <h3 class="settings-heading">새 근무자 기본 단가</h3>
       <label class="panel-card"><div><strong>1공수 기본 단가</strong><span>근무자를 새로 추가할 때 먼저 채워져요.</span></div><input class="settings-rate" id="rateInput" inputmode="numeric" value="${dailyRate}" aria-label="1공수 기본 단가" /></label>
       <button class="primary-button" id="saveRate" type="button">기본 단가 저장</button>
@@ -520,6 +530,9 @@ function openPanel(page) {
     panel.querySelectorAll("[data-site-index]").forEach((b) => b.addEventListener("click", () => openItemDialog("site", Number(b.dataset.siteIndex))));
     $("#settingsAddWorker").addEventListener("click", () => openItemDialog("worker"));
     $("#settingsAddSite").addEventListener("click", () => openItemDialog("site"));
+    $("#backupSave").addEventListener("click", downloadBackup);
+    $("#backupLoad").addEventListener("click", () => $("#backupFile").click());
+    $("#settingsMove")?.addEventListener("click", () => openInChromeWithData());
     $("#saveRate").addEventListener("click", () => {
       dailyRate = Math.max(0, Number($("#rateInput").value.replace(/[^0-9]/g, "")) || 0);
       localStorage.setItem(DAILY_RATE_KEY, String(dailyRate));
@@ -530,12 +543,12 @@ function openPanel(page) {
 }
 
 let toastTimer;
-function showToast(message) {
+function showToast(message, duration = 1800) {
   const toast = $("#toast");
   toast.textContent = message;
   toast.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), duration);
 }
 
 $("#prevMonth").addEventListener("click", () => { viewDate.setMonth(viewDate.getMonth() - 1); renderCalendar(); });
@@ -580,7 +593,156 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
   button.classList.add("active");
   if (button.dataset.page !== "calendar") openPanel(button.dataset.page);
 }));
+// ── 기록 보관 (옮기기 · 백업 · 영구 저장) ──
+// 기록은 이 휴대폰의 "브라우저 안"에 저장됩니다. 카카오톡 안 브라우저 · 크롬 · 홈 화면 앱은
+// 서로 저장 공간이 달라서, 다른 곳으로 열면 빈 화면이 보입니다. 아래 기능으로 한곳에 모아 둡니다.
+let pendingToast = "";
+const BACKUP_AT_KEY = "maeil-backup-at";
+const MOVED_AT_KEY = "maeil-moved-at";
+
+function snapshot() {
+  return {
+    app: "maeil-gongsu", v: 1, at: new Date().toISOString(), rate: dailyRate,
+    workers: workers.map(({ id, name, rate }) => ({ id, name, rate })),
+    sites: sites.map(({ name, area }) => ({ name, area: area || "" })),
+    records: records.map((r) => [r.date, r.worker, r.work, r.site, r.memo || ""])
+  };
+}
+
+function encodeData(data) {
+  const bytes = new TextEncoder().encode(JSON.stringify(data));
+  let bin = "";
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeData(text) {
+  const b64 = text.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64 + "===".slice((b64.length + 3) % 4));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+}
+
+// 들어온 기록을 지금 기록에 합침. 같은 날짜·같은 근무자 기록이 이미 있으면 지금 것을 유지.
+function mergeData(data) {
+  if (!data || data.app !== "maeil-gongsu" || !Array.isArray(data.records)) throw new Error("매일공수대장 백업이 아니에요");
+  const placeholder = workers.length === 1 && workers[0].name === "근무자 1" && !records.some((r) => r.worker === workers[0].id) ? workers[0] : null;
+  const idMap = {};
+  let added = 0; let kept = 0;
+  (data.workers || []).forEach((w) => {
+    let mine = workers.find((x) => x.name === w.name);
+    if (!mine) {
+      mine = { id: workers.some((x) => x.id === w.id) ? newId() : w.id, name: String(w.name), rate: Number(w.rate) || dailyRate };
+      workers.push(mine);
+    }
+    idMap[w.id] = mine.id;
+  });
+  (data.sites || []).forEach((site) => { if (site?.name && !sites.some((x) => x.name === site.name)) sites.push({ name: String(site.name), area: String(site.area || "") }); });
+  data.records.forEach(([date, wid, work, site, memo]) => {
+    const worker = idMap[wid] || workers[0].id;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number(work)) return;
+    if (findRecord(date, worker)) { kept += 1; return; }
+    records.push({ date, worker, work: Number(work), site: String(site || ""), memo: String(memo || "") });
+    if (site && !sites.some((x) => x.name === site)) sites.push({ name: String(site), area: "" });
+    added += 1;
+  });
+  // 비어 있던 기본 "근무자 1"은 옮겨온 근무자가 있으면 정리
+  if (placeholder && workers.length > 1 && !records.some((r) => r.worker === placeholder.id)) workers = workers.filter((w) => w !== placeholder);
+  saveWorkers(); saveSites(); saveRecords();
+  return { added, kept };
+}
+
+// 카카오톡 안에서 → 크롬(홈 화면 앱)으로 기록을 함께 들고 이동
+function openInChromeWithData(extraParams = {}) {
+  const target = new URL(APP_URL);
+  Object.entries(extraParams).forEach(([k, v]) => target.searchParams.set(k, v));
+  if (records.length) target.hash = `move=${encodeData(snapshot())}`;
+  localStorage.setItem(MOVED_AT_KEY, new Date().toISOString());
+  location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(target.href)}`;
+}
+
+// 주소에 실려 온 기록 받기
+function receiveMovedData() {
+  const match = location.hash.match(/^#(move|backup)=(.+)$/);
+  if (!match) return false;
+  history.replaceState(history.state, "", location.pathname + location.search);
+  try {
+    const { added, kept } = mergeData(decodeData(match[2]));
+    pendingToast = added ? `기록 ${added}건을 옮겨왔어요${kept ? ` (겹친 ${kept}건은 기존 유지)` : ""}` : "옮길 새 기록이 없었어요";
+  } catch {
+    pendingToast = "기록을 옮기지 못했어요. 백업 파일로 다시 시도해 주세요";
+  }
+  return true;
+}
+receiveMovedData();
+
+// 앱이 이미 열려 있을 때 옮기기 주소가 들어온 경우 (뒤로가기로 착각하지 않도록)
+function receiveMovedDataLive() {
+  if (!receiveMovedData()) return false;
+  renderCalendar();
+  renderStorageBanner();
+  refreshOpenPanel();
+  if (!document.body.classList.contains("locked") && pendingToast) { showToast(pendingToast, 3200); pendingToast = ""; }
+  return true;
+}
+window.addEventListener("hashchange", receiveMovedDataLive);
+
+function renderStorageBanner() {
+  const banner = $("#storageBanner");
+  if (!isKakaoInApp() || sessionStorage.getItem("maeil-banner-closed")) { banner.hidden = true; return; }
+  banner.hidden = false;
+  const moved = localStorage.getItem(MOVED_AT_KEY);
+  $("#storageBannerText").innerHTML = records.length
+    ? `<strong>기록이 카카오톡 안에만 저장돼 있어요</strong><span>카카오톡에서는 기록이 지워질 수 있어요. 크롬으로 옮겨 두세요.</span>`
+    : `<strong>${moved ? "기록은 크롬(홈 화면 앱)에 있어요" : "카카오톡 안에서는 기록이 지워질 수 있어요"}</strong><span>크롬이나 홈 화면 앱에서 열어 사용하세요.</span>`;
+  $("#storageBannerButton").textContent = records.length ? "크롬으로 옮기기" : "크롬에서 열기";
+}
+
+function downloadBackup() {
+  const data = snapshot();
+  const stamp = dateKey(new Date()).replace(/-/g, "");
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
+  const file = new File([blob], `매일공수_백업_${stamp}.json`, { type: "application/json" });
+  localStorage.setItem(BACKUP_AT_KEY, data.at);
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    // 휴대폰에서는 공유창이 열려 카카오톡 '나와의 채팅' 등에 보관할 수 있음
+    navigator.share({ files: [file], title: "매일공수대장 백업" }).then(() => showToast("백업 파일을 보냈어요")).catch((e) => { if (e.name !== "AbortError") saveFile(file); });
+  } else {
+    saveFile(file);
+  }
+  refreshOpenPanel();
+}
+
+function saveFile(file) {
+  const url = URL.createObjectURL(file);
+  const a = Object.assign(document.createElement("a"), { href: url, download: file.name });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  showToast("백업 파일을 저장했어요 (다운로드 폴더)");
+}
+
+function restoreBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const { added, kept } = mergeData(JSON.parse(reader.result));
+      renderCalendar();
+      refreshOpenPanel();
+      showToast(`백업에서 ${added}건을 불러왔어요${kept ? ` (겹친 ${kept}건은 기존 유지)` : ""}`, 3200);
+    } catch (error) {
+      showToast(error.message || "백업 파일을 읽지 못했어요");
+    }
+  };
+  reader.readAsText(file);
+}
+
+// 브라우저가 공간 정리할 때 이 앱의 기록은 지우지 않도록 요청
+let storagePersisted = false;
+if (navigator.storage?.persist) {
+  navigator.storage.persisted().then((ok) => ok || navigator.storage.persist()).then((ok) => { storagePersisted = Boolean(ok); }).catch(() => {});
+}
+
 renderCalendar();
+renderStorageBanner();
 
 function openMenu() {
   $("#menuShareMonth").textContent = `${viewDate.getMonth() + 1}월`;
@@ -595,7 +757,7 @@ function showAllRecords() {
   $(".recent-section").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-const isKakaoInApp = () => /KAKAOTALK/i.test(navigator.userAgent);
+function isKakaoInApp() { return /KAKAOTALK/i.test(navigator.userAgent); }
 
 // 메뉴의 "홈 화면에 추가" 버튼
 function addToHomeScreen() {
@@ -603,10 +765,8 @@ function addToHomeScreen() {
   if (installPrompt) { installApp(); return; }
   if (isKakaoInApp()) {
     // 카카오톡 안의 브라우저는 홈 화면 추가를 지원하지 않아 기본 브라우저로 엽니다.
-    const target = new URL(APP_URL);
-    target.searchParams.set("action", "install");
-    showToast("기본 브라우저에서 열고 있어요");
-    location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(target.href)}`;
+    showToast("크롬에서 열고 있어요 (기록도 함께 옮겨요)");
+    openInChromeWithData({ action: "install" });
     return;
   }
   openInstallDialog();
@@ -719,6 +879,7 @@ function stepBack() {
 window.addEventListener("popstate", () => {
   guardActive = false;
   if (exiting) return;
+  if (receiveMovedDataLive()) { if (!guardActive) pushBackGuard(); return; }
   pushBackGuard();
   if (!stepBack()) $("#exitDialog").showModal();
 });
@@ -875,3 +1036,7 @@ $("#bulkWorkerInput").addEventListener("change", updateBulkPreview);
 document.querySelectorAll('input[name="bulkWork"]').forEach((input) => input.addEventListener("change", updateBulkPreview));
 renderBulkBar();
 $("#itemDialog").addEventListener("close", () => { document.querySelectorAll("#siteInput, #bulkSiteInput").forEach((el) => { el.dataset.wantsNew = ""; }); });
+
+$("#storageBannerButton").addEventListener("click", () => openInChromeWithData());
+$("#storageBannerClose").addEventListener("click", () => { sessionStorage.setItem("maeil-banner-closed", "1"); renderStorageBanner(); });
+$("#backupFile").addEventListener("change", (event) => { const file = event.target.files[0]; event.target.value = ""; if (file) restoreBackup(file); });

@@ -16,7 +16,7 @@
     <link rel="manifest" href="./manifest.webmanifest?v=4" />
     <link rel="icon" type="image/svg+xml" href="./icons/app-icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./styles.css?v=7" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
   </head>
   <body class="locked">
     <section class="auth-screen" id="authScreen" aria-labelledby="authTitle">
@@ -53,6 +53,11 @@
       </header>
 
       <main>
+        <div class="storage-banner" id="storageBanner" hidden>
+          <div id="storageBannerText"></div>
+          <button type="button" class="storage-banner-button" id="storageBannerButton">크롬으로 옮기기</button>
+          <button type="button" class="storage-banner-close" id="storageBannerClose" aria-label="닫기">×</button>
+        </div>
         <section class="summary" aria-labelledby="summary-title">
           <div class="summary-top">
             <div>
@@ -304,7 +309,8 @@
       </div>
     </dialog>
 
+    <input type="file" id="backupFile" accept="application/json,.json" hidden />
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=7"></script>
+    <script src="./app.js?v=8"></script>
   </body>
 </html>
