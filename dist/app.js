@@ -67,9 +67,11 @@ const formatWon = (value) => `${Math.round(value).toLocaleString("ko-KR")}원`;
 const formatNum = (value) => Math.round(value).toLocaleString("ko-KR");
 const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
-const saveRecords = () => localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
-const saveWorkers = () => localStorage.setItem(WORKERS_KEY, JSON.stringify(workers));
-const saveSites = () => localStorage.setItem(SITES_KEY, JSON.stringify(sites));
+const SAVED_AT_KEY = "maeil-saved-at";
+const markSaved = () => localStorage.setItem(SAVED_AT_KEY, new Date().toISOString());
+const saveRecords = () => { localStorage.setItem(RECORDS_KEY, JSON.stringify(records)); markSaved(); };
+const saveWorkers = () => { localStorage.setItem(WORKERS_KEY, JSON.stringify(workers)); markSaved(); };
+const saveSites = () => { localStorage.setItem(SITES_KEY, JSON.stringify(sites)); markSaved(); };
 const koreanDate = (date) => new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "long" }).format(date);
 const workerById = (id) => workers.find((w) => w.id === id);
 const workerName = (id) => workerById(id)?.name || "근무자";
@@ -226,6 +228,7 @@ function openWorkDialog(date, workerId) {
   $("#workerInput").value = worker;
   loadWorkForm();
   if (!$("#workDialog").open) $("#workDialog").showModal();
+  markClean("#workDialog");
 }
 
 // 선택한 날짜 + 근무자의 기록을 창에 채움 (없으면 새 기록)
@@ -289,8 +292,9 @@ async function deleteRecord(date, worker) {
 let pinResolve = null;
 // requirePin: false 이면 비밀번호 없이 확인만 받음
 let pinRequired = true;
-function askPasscode({ title, message, confirm = "확인", danger = false, requirePin = true }) {
-  if (pinResolve) pinResolve(false);
+function askPasscode({ title, message, confirm = "확인", cancel = "취소", danger = false, requirePin = true }) {
+  if (pinResolve) pinResolve(null);
+  $("#pinCancel").textContent = cancel;
   pinRequired = requirePin;
   $("#pinEyebrow").textContent = requirePin ? "비밀번호 확인" : "확인";
   $("#pinInput").hidden = !requirePin;
@@ -344,6 +348,7 @@ function openItemDialog(kind, index = -1) {
   const inUse = item && records.some((r) => (isWorker ? r.worker === item.id : r.site === item.name));
   $("#itemDelete").hidden = !item || inUse || (isWorker && workers.length < 2);
   $("#itemDialog").showModal();
+  markClean("#itemDialog");
   setTimeout(() => $("#itemNameInput").focus(), 50);
 }
 
@@ -558,7 +563,7 @@ $("#todayButton").addEventListener("click", () => { viewDate = new Date(today.ge
 $("#addWorkButton").addEventListener("click", () => openWorkDialog(today));
 $("#workerInput").addEventListener("change", loadWorkForm);
 $("#itemForm").addEventListener("submit", saveItem);
-$("#itemClose").addEventListener("click", () => $("#itemDialog").close());
+$("#itemClose").addEventListener("click", () => closeWithSaveCheck("#itemDialog"));
 $("#itemDelete").addEventListener("click", deleteItem);
 $("#privacyButton").addEventListener("click", () => { hideMoney = !hideMoney; renderCalendar(); });
 $("#viewAllButton").addEventListener("click", () => {
@@ -568,7 +573,7 @@ $("#viewAllButton").addEventListener("click", () => {
   renderRecent(!expanded);
 });
 $("#workForm").addEventListener("submit", saveRecord);
-$("#workClose").addEventListener("click", () => $("#workDialog").close());
+$("#workClose").addEventListener("click", () => closeWithSaveCheck("#workDialog"));
 document.querySelectorAll('input[name="work"]').forEach((input) => input.addEventListener("change", updateDayPay));
 $("#panelClose").addEventListener("click", () => $("#panelDialog").close());
 $("#menuButton").addEventListener("click", openMenu);
@@ -580,8 +585,8 @@ $("#shareButton").addEventListener("click", shareMonth);
 $("#deleteRecordButton").addEventListener("click", () => deleteRecord($("#selectedDate").value, $("#workerInput").value));
 $("#pinForm").addEventListener("submit", submitPin);
 $("#pinCancel").addEventListener("click", () => finishPasscode(false));
-$("#pinClose").addEventListener("click", () => finishPasscode(false));
-$("#pinDialog").addEventListener("cancel", (event) => { event.preventDefault(); finishPasscode(false); });
+$("#pinClose").addEventListener("click", () => finishPasscode(null));
+$("#pinDialog").addEventListener("cancel", (event) => { event.preventDefault(); finishPasscode(null); });
 $("#panelDialog").addEventListener("close", resetNav);
 $("#exitCancel").addEventListener("click", () => $("#exitDialog").close());
 $("#exitConfirm").addEventListener("click", exitApp);
@@ -852,9 +857,12 @@ function pushBackGuard() {
 }
 
 function stepBack() {
-  if ($("#pinDialog").open) { finishPasscode(false); return true; }
+  if ($("#pinDialog").open) { finishPasscode(null); return true; }
   if ($("#exitDialog").open) { $("#exitDialog").close(); return true; }
-  for (const id of ["#itemDialog", "#bulkDialog", "#workDialog", "#installDialog", "#panelDialog", "#menuDialog"]) {
+  for (const id of ["#itemDialog", "#bulkDialog", "#workDialog"]) {
+    if ($(id).open) { closeWithSaveCheck(id); return true; }
+  }
+  for (const id of ["#installDialog", "#panelDialog", "#menuDialog"]) {
     if ($(id).open) { $(id).close(); return true; }
   }
   if (document.body.classList.contains("locked")) return false;
@@ -881,7 +889,7 @@ window.addEventListener("popstate", () => {
   if (exiting) return;
   if (receiveMovedDataLive()) { if (!guardActive) pushBackGuard(); return; }
   pushBackGuard();
-  if (!stepBack()) $("#exitDialog").showModal();
+  if (!stepBack()) openExitDialog();
 });
 
 let exiting = false;
@@ -979,6 +987,7 @@ function openBulkDialog() {
   document.querySelectorAll('input[name="bulkWork"]').forEach((input) => { input.checked = input.value === "1"; });
   updateBulkPreview();
   $("#bulkDialog").showModal();
+  markClean("#bulkDialog");
 }
 
 function updateBulkPreview() {
@@ -1031,7 +1040,7 @@ $("#bulkClear").addEventListener("click", () => { bulk.dates.clear(); renderCale
 $("#bulkEdit").addEventListener("click", openBulkDialog);
 $("#bulkDelete").addEventListener("click", bulkDelete);
 $("#bulkForm").addEventListener("submit", applyBulk);
-$("#bulkClose").addEventListener("click", () => $("#bulkDialog").close());
+$("#bulkClose").addEventListener("click", () => closeWithSaveCheck("#bulkDialog"));
 $("#bulkWorkerInput").addEventListener("change", updateBulkPreview);
 document.querySelectorAll('input[name="bulkWork"]').forEach((input) => input.addEventListener("change", updateBulkPreview));
 renderBulkBar();
@@ -1040,3 +1049,50 @@ $("#itemDialog").addEventListener("close", () => { document.querySelectorAll("#s
 $("#storageBannerButton").addEventListener("click", () => openInChromeWithData());
 $("#storageBannerClose").addEventListener("click", () => { sessionStorage.setItem("maeil-banner-closed", "1"); renderStorageBanner(); });
 $("#backupFile").addEventListener("change", (event) => { const file = event.target.files[0]; event.target.value = ""; if (file) restoreBackup(file); });
+
+// ── 저장 재확인 ──
+// 입력창을 닫기 전, 바뀐 내용이 있으면 저장할지 묻습니다.
+function formState(id) {
+  return JSON.stringify([...$(id).querySelectorAll("input, select")].map((el) => (el.type === "radio" ? el.checked : el.value)));
+}
+function markClean(id) { $(id).dataset.initial = formState(id); }
+function isDirty(id) { return $(id).open && $(id).dataset.initial !== undefined && $(id).dataset.initial !== formState(id); }
+
+async function closeWithSaveCheck(id) {
+  const dialog = $(id);
+  if (!isDirty(id)) { dialog.close(); return; }
+  const what = id === "#itemDialog" ? "근무자·현장 정보를" : id === "#bulkDialog" ? "일괄 수정 내용을" : "공수 기록을";
+  const answer = await askPasscode({ title: "저장할까요?", message: `입력한 ${what} 아직 저장하지 않았어요. 저장하고 닫을까요?`, confirm: "저장", cancel: "저장 안 함", requirePin: false });
+  if (answer === true) dialog.querySelector("form").requestSubmit();
+  else if (answer === false) dialog.close();
+  // answer === null (뒤로가기·×): 입력창을 그대로 두고 계속 입력
+}
+
+// 종료 전에 휴대폰에 실제로 저장됐는지 다시 읽어서 확인 (안 맞으면 다시 저장)
+function verifySaved() {
+  try {
+    const pairs = [[RECORDS_KEY, records], [WORKERS_KEY, workers], [SITES_KEY, sites]];
+    pairs.forEach(([key, value]) => { const json = JSON.stringify(value); if (localStorage.getItem(key) !== json) { localStorage.setItem(key, json); markSaved(); } });
+    return pairs.every(([key, value]) => localStorage.getItem(key) === JSON.stringify(value));
+  } catch {
+    return false;
+  }
+}
+
+function openExitDialog() {
+  const ok = verifySaved();
+  const savedAt = localStorage.getItem(SAVED_AT_KEY);
+  const when = savedAt ? new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(savedAt)) : "";
+  const status = $("#exitSaveStatus");
+  status.className = `exit-save ${ok ? (isKakaoInApp() ? "warn" : "ok") : "fail"}`;
+  status.innerHTML = !ok
+    ? `<strong>⚠ 저장 확인 실패</strong><span>휴대폰 저장 공간에 쓰지 못했어요. 종료하기 전에 백업 파일을 만들어 주세요.</span>`
+    : isKakaoInApp()
+      ? `<strong>✓ 기록 ${records.length}건 저장됨${when ? ` · ${when}` : ""}</strong><span>카카오톡 안에 저장돼 있어 지워질 수 있어요. 크롬으로 옮겨 두세요.</span>`
+      : `<strong>✓ 기록 ${records.length}건 저장 완료</strong><span>${when ? `마지막 저장 ${when} · ` : ""}다음에 열어도 그대로 있어요.</span>`;
+  $("#exitMove").hidden = !(isKakaoInApp() && records.length);
+  $("#exitBackup").hidden = ok;
+  $("#exitDialog").showModal();
+}
+$("#exitMove").addEventListener("click", () => { $("#exitDialog").close(); openInChromeWithData(); });
+$("#exitBackup").addEventListener("click", () => { $("#exitDialog").close(); downloadBackup(); });

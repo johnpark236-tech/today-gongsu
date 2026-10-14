@@ -346,3 +346,17 @@ body.bulk-mode .calendar-day:not(.outside) { box-shadow: inset 0 0 0 1px #e6ebe7
 .storage-banner-close { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: #a07b1f; font-size: 1.3rem; }
 .storage-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .storage-note { margin: 0 2px; color: var(--muted); font-size: .7rem; line-height: 1.5; }
+
+/* 종료 전 저장 확인 */
+.exit-body { margin-bottom: 14px; }
+.exit-save { margin-bottom: 14px; padding: 12px 14px; border-radius: 14px; text-align: left; }
+.exit-save strong { display: block; font-size: .86rem; }
+.exit-save span { display: block; margin-top: 3px; font-size: .74rem; line-height: 1.45; }
+.exit-save.ok { background: var(--green-100); color: var(--green-800); }
+.exit-save.ok span { color: #4f6b57; }
+.exit-save.warn { background: #fff4d6; color: #6b4600; }
+.exit-save.warn span { color: #87610f; }
+.exit-save.fail { background: #fff0ee; color: #b3261e; }
+.exit-save.fail span { color: #9a3d35; }
+.exit-extra { width: 100%; margin-bottom: 12px; }
+.exit-extra[hidden] { display: none; }

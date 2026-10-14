@@ -16,7 +16,7 @@
     <link rel="manifest" href="./manifest.webmanifest?v=4" />
     <link rel="icon" type="image/svg+xml" href="./icons/app-icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./styles.css?v=8" />
+    <link rel="stylesheet" href="./styles.css?v=9" />
   </head>
   <body class="locked">
     <section class="auth-screen" id="authScreen" aria-labelledby="authTitle">
@@ -301,8 +301,10 @@
       <div class="exit-body">
         <img src="./icons/app-icon.svg" alt="" width="56" height="56" />
         <h2>매일공수대장을 종료할까요?</h2>
-        <p>입력한 기록은 이 휴대폰에 그대로 저장돼 있어요.</p>
       </div>
+      <div class="exit-save ok" id="exitSaveStatus"></div>
+      <button type="button" class="add-row exit-extra" id="exitMove" hidden>크롬으로 기록 옮기기</button>
+      <button type="button" class="add-row exit-extra" id="exitBackup" hidden>백업 파일 만들기</button>
       <div class="dialog-actions">
         <button class="ghost-button" id="exitCancel" type="button">취소</button>
         <button class="primary-button" id="exitConfirm" type="button">종료</button>
@@ -311,6 +313,6 @@
 
     <input type="file" id="backupFile" accept="application/json,.json" hidden />
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=8"></script>
+    <script src="./app.js?v=9"></script>
   </body>
 </html>
